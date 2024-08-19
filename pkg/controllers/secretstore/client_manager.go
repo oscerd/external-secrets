@@ -77,7 +77,7 @@ func NewManager(ctrlClient client.Client, controllerClass string, enableFloodgat
 	}
 }
 
-func (m *Manager) getProviderSpec(ctx context.Context, ref *esmetav1.ProviderRef, namespace string) (client.Object, error) {
+func (m *Manager) getProviderSpec(ctx context.Context, ref *esmetav1.ProviderRef, _ string) (client.Object, error) {
 	p, err := prov.GetManifestByKind(ref.Kind)
 	if err != nil {
 		return nil, fmt.Errorf("could not get a provider for kind %v", ref.Kind)

@@ -17,6 +17,7 @@ package delinea
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/DelineaXPM/dsv-sdk-go/v2/vault"
 	kubeClient "sigs.k8s.io/controller-runtime/pkg/client"

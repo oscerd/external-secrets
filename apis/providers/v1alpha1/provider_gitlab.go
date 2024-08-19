@@ -15,8 +15,9 @@ limitations under the License.
 package v1alpha1
 
 import (
-	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
 )
 
 // +kubebuilder:object:root=true

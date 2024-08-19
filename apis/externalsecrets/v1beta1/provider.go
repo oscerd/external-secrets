@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 const (
@@ -59,7 +60,11 @@ type Provider interface {
 	NewClient(ctx context.Context, store GenericStore, kube client.Client, namespace string) (SecretsClient, error)
 	Convert(store GenericStore) (client.Object, error)
 	// ValidateStore checks if the provided store is valid
-	ValidateStore(store GenericStore) error
+	// The provider may return a warning and an error.
+	// The intended use of the warning to indicate a deprecation of behavior
+	// or other type of message that is NOT a validation failure but should be noticed by the user.
+	ValidateStore(store GenericStore) (admission.Warnings, error)
+
 	// Capabilities returns the provider Capabilities (Read, Write, ReadWrite)
 	Capabilities() SecretStoreCapabilities
 }
@@ -81,6 +86,9 @@ type SecretsClient interface {
 
 	// DeleteSecret will delete the secret from a provider
 	DeleteSecret(ctx context.Context, remoteRef PushSecretRemoteRef) error
+
+	// SecretExists checks if a secret is already present in the provider at the given location.
+	SecretExists(ctx context.Context, remoteRef PushSecretRemoteRef) (bool, error)
 
 	// Validate checks if the client is configured correctly
 	// and is able to retrieve secrets from the provider.
@@ -104,4 +112,14 @@ type NoSecretError struct{}
 
 func (NoSecretError) Error() string {
 	return "Secret does not exist"
+}
+
+var NotModifiedErr = NotModifiedError{}
+
+// NotModifiedError to signal that the webhook received no changes,
+// and it should just return without doing anything.
+type NotModifiedError struct{}
+
+func (NotModifiedError) Error() string {
+	return "not modified"
 }

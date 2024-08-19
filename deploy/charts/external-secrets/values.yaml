@@ -1,4 +1,21 @@
+global:
+  nodeSelector: {}
+  tolerations: []
+  topologySpreadConstraints: []
+  affinity: {}
+  compatibility:
+    openshift:
+      # -- Manages the securityContext properties to make them compatible with OpenShift.
+      # Possible values:
+      # auto - Apply configurations if it is detected that OpenShift is the target platform.
+      # force - Always apply configurations.
+      # disabled - No modification applied.
+      adaptSecurityContext: auto
+
 replicaCount: 1
+
+bitwarden-sdk-server:
+  enabled: false
 
 # -- Specifies the amount of historic ReplicaSets k8s should keep (see https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy)
 revisionHistoryLimit: 10
@@ -7,10 +24,12 @@ image:
   repository: ghcr.io/external-secrets/external-secrets
   pullPolicy: IfNotPresent
   # -- The image tag to use. The default is the chart appVersion.
+  tag: ""
+  # -- The flavour of tag you want to use
   # There are different image flavours available, like distroless and ubi.
   # Please see GitHub release notes for image tags for these flavors.
-  # By default the distroless image is used.
-  tag: ""
+  # By default, the distroless image is used.
+  flavour: ""
 
 # -- If set, install and upgrade CRDs through helm chart.
 installCRDs: true
@@ -29,6 +48,7 @@ crds:
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
+namespaceOverride: ""
 
 # -- Additional labels added to all helm chart resources.
 commonLabels: {}
@@ -68,6 +88,15 @@ createOperator: true
 # -- Specifies the number of concurrent ExternalSecret Reconciles external-secret executes at
 # a time.
 concurrent: 1
+# -- Specifices Log Params to the Webhook
+log:
+  level: info
+  timeEncoding: epoch
+service:
+  # -- Set the ip family policy to configure dual-stack see [Configure dual-stack](https://kubernetes.io/docs/concepts/services-networking/dual-stack/#services)
+  ipFamilyPolicy: ""
+  # -- Sets the families that should be supported and the order in which they should be applied to ClusterIP as well. Can be IPv4 and/or IPv6.
+  ipFamilies: []
 
 serviceAccount:
   # -- Specifies whether a service account should be created.
@@ -99,6 +128,9 @@ extraArgs: {}
 ## -- Extra volumes to pass to pod.
 extraVolumes: []
 
+## -- Extra Kubernetes objects to deploy with the helm chart
+extraObjects: []
+
 ## -- Extra volumes to mount to the container.
 extraVolumeMounts: []
 
@@ -113,7 +145,8 @@ podAnnotations: {}
 
 podLabels: {}
 
-podSecurityContext: {}
+podSecurityContext:
+  enabled: true
   # fsGroup: 2000
 
 securityContext:
@@ -121,6 +154,7 @@ securityContext:
   capabilities:
     drop:
       - ALL
+  enabled: true
   readOnlyRootFilesystem: true
   runAsNonRoot: true
   runAsUser: 1000
@@ -131,13 +165,6 @@ resources: {}
   # requests:
   #   cpu: 10m
   #   memory: 32Mi
-
-prometheus:
-  # -- deprecated. will be removed with 0.7.0, use serviceMonitor instead.
-  enabled: false
-  service:
-    # -- deprecated. will be removed with 0.7.0, use serviceMonitor instead.
-    port: 8080
 
 serviceMonitor:
   # -- Specifies whether to create a ServiceMonitor resource for collecting Prometheus metrics
@@ -177,6 +204,10 @@ serviceMonitor:
   #   action: replace
 
 metrics:
+
+  listen:
+    port: 8080
+
   service:
     # -- Enable if you use another monitoring tool than Prometheus to scrape the metrics
     enabled: false
@@ -215,7 +246,10 @@ webhook:
   # -- Specifices the lookaheadInterval for certificate validity
   lookaheadInterval: ""
   replicaCount: 1
-
+  # -- Specifices Log Params to the Webhook
+  log:
+    level: info
+    timeEncoding: epoch
   # -- Specifies the amount of historic ReplicaSets k8s should keep (see https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy)
   revisionHistoryLimit: 10
 
@@ -227,8 +261,10 @@ webhook:
   image:
     repository: ghcr.io/external-secrets/external-secrets
     pullPolicy: IfNotPresent
-  # -- The image tag to use. The default is the chart appVersion.
+    # -- The image tag to use. The default is the chart appVersion.
     tag: ""
+    # -- The flavour of tag you want to use
+    flavour: ""
   imagePullSecrets: []
   nameOverride: ""
   fullnameOverride: ""
@@ -274,7 +310,8 @@ webhook:
         name: "my-issuer"
       # -- Set the requested duration (i.e. lifetime) of the Certificate. See
       # https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.CertificateSpec
-      duration: ""
+      # One year by default.
+      duration: "8760h"
       # -- How long before the currently issued certificate’s expiry
       # cert-manager should renew the certificate. See
       # https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.CertificateSpec
@@ -299,14 +336,12 @@ webhook:
     enabled: false
     minAvailable: 1
     # maxUnavailable: 1
-  prometheus:
-    # -- deprecated. will be removed with 0.7.0, use serviceMonitor instead
-    enabled: false
-    service:
-      # -- deprecated. will be removed with 0.7.0, use serviceMonitor instead
-      port: 8080
 
   metrics:
+
+    listen:
+      port: 8080
+
     service:
       # -- Enable if you use another monitoring tool than Prometheus to scrape the metrics
       enabled: false
@@ -348,7 +383,8 @@ webhook:
 
   podLabels: {}
 
-  podSecurityContext: {}
+  podSecurityContext:
+    enabled: true
       # fsGroup: 2000
 
   securityContext:
@@ -356,6 +392,7 @@ webhook:
     capabilities:
       drop:
         - ALL
+    enabled: true
     readOnlyRootFilesystem: true
     runAsNonRoot: true
     runAsUser: 1000
@@ -372,7 +409,10 @@ certController:
   create: true
   requeueInterval: "5m"
   replicaCount: 1
-
+  # -- Specifices Log Params to the Webhook
+  log:
+    level: info
+    timeEncoding: epoch
   # -- Specifies the amount of historic ReplicaSets k8s should keep (see https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy)
   revisionHistoryLimit: 10
 
@@ -380,6 +420,7 @@ certController:
     repository: ghcr.io/external-secrets/external-secrets
     pullPolicy: IfNotPresent
     tag: ""
+    flavour: ""
   imagePullSecrets: []
   nameOverride: ""
   fullnameOverride: ""
@@ -418,14 +459,11 @@ certController:
     minAvailable: 1
     # maxUnavailable: 1
 
-  prometheus:
-    # -- deprecated. will be removed with 0.7.0, use serviceMonitor instead
-    enabled: false
-    service:
-      # -- deprecated. will be removed with 0.7.0, use serviceMonitor instead
+  metrics:
+
+    listen:
       port: 8080
 
-  metrics:
     service:
       # -- Enable if you use another monitoring tool than Prometheus to scrape the metrics
       enabled: false
@@ -463,7 +501,8 @@ certController:
 
   podLabels: {}
 
-  podSecurityContext: {}
+  podSecurityContext:
+    enabled: true
       # fsGroup: 2000
 
   securityContext:
@@ -471,6 +510,7 @@ certController:
     capabilities:
       drop:
         - ALL
+    enabled: true
     readOnlyRootFilesystem: true
     runAsNonRoot: true
     runAsUser: 1000
@@ -482,5 +522,11 @@ certController:
       #   cpu: 10m
       #   memory: 32Mi
 
+# -- Specifies `dnsPolicy` to deployment
+dnsPolicy: ClusterFirst
+
 # -- Specifies `dnsOptions` to deployment
 dnsConfig: {}
+
+# -- Any extra pod spec on the deployment
+podSpecExtra: {}

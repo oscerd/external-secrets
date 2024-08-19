@@ -11,6 +11,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package v1beta1
 
 import (
@@ -23,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 type PP struct{}
@@ -58,6 +60,11 @@ func (p *PP) DeleteSecret(_ context.Context, _ PushSecretRemoteRef) error {
 	return nil
 }
 
+// Exists checks if a secret is already present in the provider at the given location.
+func (p *PP) SecretExists(_ context.Context, _ PushSecretRemoteRef) (bool, error) {
+	return false, nil
+}
+
 // GetSecret returns a single secret from the provider.
 func (p *PP) GetSecret(_ context.Context, _ ExternalSecretDataRemoteRef) ([]byte, error) {
 	return []byte("NOOP"), nil
@@ -82,8 +89,8 @@ func (p *PP) Validate() (ValidationResult, error) {
 	return ValidationResultReady, nil
 }
 
-func (p *PP) ValidateStore(_ GenericStore) error {
-	return nil
+func (p *PP) ValidateStore(_ GenericStore) (admission.Warnings, error) {
+	return nil, nil
 }
 
 // TestRegister tests if the Register function

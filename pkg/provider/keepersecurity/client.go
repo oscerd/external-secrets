@@ -11,6 +11,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package keepersecurity
 
 import (
@@ -71,14 +72,14 @@ type SecurityClient interface {
 }
 
 type Field struct {
-	Type  string   `json:"type"`
-	Value []string `json:"value"`
+	Type  string `json:"type"`
+	Value []any  `json:"value"`
 }
 
 type CustomField struct {
-	Type  string   `json:"type"`
-	Label string   `json:"label"`
-	Value []string `json:"value"`
+	Type  string `json:"type"`
+	Label string `json:"label"`
+	Value []any  `json:"value"`
 }
 
 type File struct {
@@ -209,6 +210,10 @@ func (c *Client) DeleteSecret(_ context.Context, remoteRef esv1beta1.PushSecretR
 	}
 
 	return nil
+}
+
+func (c *Client) SecretExists(_ context.Context, _ esv1beta1.PushSecretRemoteRef) (bool, error) {
+	return false, fmt.Errorf("not implemented")
 }
 
 func (c *Client) buildSecretNameAndKey(remoteRef esv1beta1.PushSecretRemoteRef) ([]string, error) {
@@ -401,10 +406,25 @@ func (s *Secret) getItems(ref esv1beta1.ExternalSecretDataRemoteRef) (map[string
 	return secretData, nil
 }
 
+func getFieldValue(value []any) []byte {
+	if len(value) < 1 {
+		return []byte{}
+	} else if len(value) == 1 {
+		res, _ := json.Marshal(value[0])
+		if str, ok := value[0].(string); ok {
+			res = []byte(str)
+		}
+		return res
+	} else {
+		res, _ := json.Marshal(value)
+		return res
+	}
+}
+
 func (s *Secret) getField(key string) ([]byte, error) {
 	for _, field := range s.Fields {
 		if field.Type == key && field.Type != keeperSecurityFileRef && field.Type != keeperSecurityMfa && len(field.Value) > 0 {
-			return []byte(field.Value[0]), nil
+			return getFieldValue(field.Value), nil
 		}
 	}
 
@@ -415,7 +435,7 @@ func (s *Secret) getFields() map[string][]byte {
 	secretData := make(map[string][]byte)
 	for _, field := range s.Fields {
 		if len(field.Value) > 0 {
-			secretData[field.Type] = []byte(field.Value[0])
+			secretData[field.Type] = getFieldValue(field.Value)
 		}
 	}
 
@@ -425,7 +445,7 @@ func (s *Secret) getFields() map[string][]byte {
 func (s *Secret) getCustomField(key string) ([]byte, error) {
 	for _, field := range s.Custom {
 		if field.Label == key && len(field.Value) > 0 {
-			return []byte(field.Value[0]), nil
+			return getFieldValue(field.Value), nil
 		}
 	}
 
@@ -436,7 +456,7 @@ func (s *Secret) getCustomFields() map[string][]byte {
 	secretData := make(map[string][]byte)
 	for _, field := range s.Custom {
 		if len(field.Value) > 0 {
-			secretData[field.Label] = []byte(field.Value[0])
+			secretData[field.Label] = getFieldValue(field.Value)
 		}
 	}
 

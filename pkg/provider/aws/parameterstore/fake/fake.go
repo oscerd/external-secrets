@@ -11,6 +11,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package fake
 
 import (
@@ -25,12 +26,14 @@ import (
 
 // Client implements the aws parameterstore interface.
 type Client struct {
-	GetParameterWithContextFn        GetParameterWithContextFn
-	GetParametersByPathWithContextFn GetParametersByPathWithContextFn
-	PutParameterWithContextFn        PutParameterWithContextFn
-	DeleteParameterWithContextFn     DeleteParameterWithContextFn
-	DescribeParametersWithContextFn  DescribeParametersWithContextFn
-	ListTagsForResourceWithContextFn ListTagsForResourceWithContextFn
+	GetParameterWithContextFn           GetParameterWithContextFn
+	GetParametersByPathWithContextFn    GetParametersByPathWithContextFn
+	PutParameterWithContextFn           PutParameterWithContextFn
+	PutParameterWithContextCalledN      int
+	PutParameterWithContextFnCalledWith [][]*ssm.PutParameterInput
+	DeleteParameterWithContextFn        DeleteParameterWithContextFn
+	DescribeParametersWithContextFn     DescribeParametersWithContextFn
+	ListTagsForResourceWithContextFn    ListTagsForResourceWithContextFn
 }
 
 type GetParameterWithContextFn func(aws.Context, *ssm.GetParameterInput, ...request.Option) (*ssm.GetParameterOutput, error)
@@ -85,6 +88,8 @@ func NewDescribeParametersWithContextFn(output *ssm.DescribeParametersOutput, er
 }
 
 func (sm *Client) PutParameterWithContext(ctx aws.Context, input *ssm.PutParameterInput, options ...request.Option) (*ssm.PutParameterOutput, error) {
+	sm.PutParameterWithContextCalledN++
+	sm.PutParameterWithContextFnCalledWith = append(sm.PutParameterWithContextFnCalledWith, []*ssm.PutParameterInput{input})
 	return sm.PutParameterWithContextFn(ctx, input, options...)
 }
 

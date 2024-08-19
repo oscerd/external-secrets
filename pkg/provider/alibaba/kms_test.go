@@ -102,7 +102,7 @@ var setNilMockClient = func(kmstc *keyManagementServiceTestCase) {
 }
 
 func TestAlibabaKMSGetSecret(t *testing.T) {
-	secretData := make(map[string]interface{})
+	secretData := make(map[string]any)
 	secretValue := "changedvalue"
 	secretData["payload"] = secretValue
 
@@ -201,7 +201,7 @@ func TestValidateAccessKeyStore(t *testing.T) {
 		},
 	}
 
-	err := kms.ValidateStore(store)
+	_, err := kms.ValidateStore(store)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
@@ -228,7 +228,7 @@ func TestValidateRRSAStore(t *testing.T) {
 		},
 	}
 
-	err := kms.ValidateStore(store)
+	_, err := kms.ValidateStore(store)
 	if err != nil {
 		t.Errorf(err.Error())
 	}

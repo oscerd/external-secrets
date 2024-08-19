@@ -288,7 +288,7 @@ type ExternalSecretRewrite struct {
 	// Used to apply string transformation on the secrets.
 	// The resulting key will be the output of the template applied by the operation.
 	// +optional
-	Transform *ExtermalSecretRewriteTransform `json:"transform,omitempty"`
+	Transform *ExternalSecretRewriteTransform `json:"transform,omitempty"`
 }
 
 type ExternalSecretRewriteRegexp struct {
@@ -298,7 +298,7 @@ type ExternalSecretRewriteRegexp struct {
 	Target string `json:"target"`
 }
 
-type ExtermalSecretRewriteTransform struct {
+type ExternalSecretRewriteTransform struct {
 	// Used to define the template to apply on the secret name.
 	// `.value ` will specify the secret name in the template.
 	Template string `json:"template"`
@@ -426,13 +426,11 @@ const (
 	// ConditionReasonSecretDeleted indicates that the secret has been deleted.
 	ConditionReasonSecretDeleted = "SecretDeleted"
 
-	ReasonInvalidStoreRef      = "InvalidStoreRef"
-	ReasonUnavailableStore     = "UnavailableStore"
-	ReasonProviderClientConfig = "InvalidProviderClientConfig"
-	ReasonUpdateFailed         = "UpdateFailed"
-	ReasonDeprecated           = "ParameterDeprecated"
-	ReasonUpdated              = "Updated"
-	ReasonDeleted              = "Deleted"
+	ReasonUpdateFailed = "UpdateFailed"
+	ReasonDeprecated   = "ParameterDeprecated"
+	ReasonCreated      = "Created"
+	ReasonUpdated      = "Updated"
+	ReasonDeleted      = "Deleted"
 )
 
 type ExternalSecretStatus struct {
@@ -455,6 +453,7 @@ type ExternalSecretStatus struct {
 // +kubebuilder:storageversion
 // ExternalSecret is the Schema for the external-secrets API.
 // +kubebuilder:subresource:status
+// +kubebuilder:metadata:labels="external-secrets.io/component=controller"
 // +kubebuilder:resource:scope=Namespaced,categories={externalsecrets},shortName=es
 // +kubebuilder:printcolumn:name="Store",type=string,JSONPath=`.spec.secretStoreRef.name`
 // +kubebuilder:printcolumn:name="Refresh Interval",type=string,JSONPath=`.spec.refreshInterval`

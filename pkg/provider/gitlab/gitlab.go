@@ -11,6 +11,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package gitlab
 
 import (
@@ -25,7 +26,6 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/xanzy/go-gitlab"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
@@ -33,14 +33,14 @@ import (
 	"github.com/external-secrets/external-secrets/pkg/find"
 	"github.com/external-secrets/external-secrets/pkg/metrics"
 	"github.com/external-secrets/external-secrets/pkg/utils"
+	"github.com/external-secrets/external-secrets/pkg/utils/resolvers"
 )
 
 const (
 	errGitlabCredSecretName                   = "credentials are empty"
 	errInvalidClusterStoreMissingSAKNamespace = "invalid clusterStore missing SAK namespace"
 	errFetchSAKSecret                         = "couldn't find secret on cluster: %w"
-	errMissingSAK                             = "missing credentials while setting auth"
-	errList                                   = "could not verify whether the gilabClient is valid: %w"
+	errList                                   = "could not verify whether the gitlabClient is valid: %w"
 	errProjectAuth                            = "gitlabClient is not allowed to get secrets for project id [%s]"
 	errGroupAuth                              = "gitlabClient is not allowed to get secrets for group id [%s]"
 	errUninitializedGitlabProvider            = "provider gitlab is not initialized"
@@ -49,6 +49,7 @@ const (
 	errTagsOnlyEnvironmentSupported           = "'find.tags' only supports 'environment_scope'"
 	errPathNotImplemented                     = "'find.path' is not implemented in the GitLab provider"
 	errJSONSecretUnmarshal                    = "unable to unmarshal secret: %w"
+	errNotImplemented                         = "not implemented"
 )
 
 // https://github.com/external-secrets/external-secrets/issues/644
@@ -56,17 +57,17 @@ var _ esv1beta1.SecretsClient = &gitlabBase{}
 var _ esv1beta1.Provider = &Provider{}
 
 type ProjectsClient interface {
-	ListProjectsGroups(pid interface{}, opt *gitlab.ListProjectGroupOptions, options ...gitlab.RequestOptionFunc) ([]*gitlab.ProjectGroup, *gitlab.Response, error)
+	ListProjectsGroups(pid any, opt *gitlab.ListProjectGroupOptions, options ...gitlab.RequestOptionFunc) ([]*gitlab.ProjectGroup, *gitlab.Response, error)
 }
 
 type ProjectVariablesClient interface {
-	GetVariable(pid interface{}, key string, opt *gitlab.GetProjectVariableOptions, options ...gitlab.RequestOptionFunc) (*gitlab.ProjectVariable, *gitlab.Response, error)
-	ListVariables(pid interface{}, opt *gitlab.ListProjectVariablesOptions, options ...gitlab.RequestOptionFunc) ([]*gitlab.ProjectVariable, *gitlab.Response, error)
+	GetVariable(pid any, key string, opt *gitlab.GetProjectVariableOptions, options ...gitlab.RequestOptionFunc) (*gitlab.ProjectVariable, *gitlab.Response, error)
+	ListVariables(pid any, opt *gitlab.ListProjectVariablesOptions, options ...gitlab.RequestOptionFunc) ([]*gitlab.ProjectVariable, *gitlab.Response, error)
 }
 
 type GroupVariablesClient interface {
-	GetVariable(gid interface{}, key string, options ...gitlab.RequestOptionFunc) (*gitlab.GroupVariable, *gitlab.Response, error)
-	ListVariables(gid interface{}, opt *gitlab.ListGroupVariablesOptions, options ...gitlab.RequestOptionFunc) ([]*gitlab.GroupVariable, *gitlab.Response, error)
+	GetVariable(gid any, key string, options ...gitlab.RequestOptionFunc) (*gitlab.GroupVariable, *gitlab.Response, error)
+	ListVariables(gid any, opt *gitlab.ListGroupVariablesOptions, options ...gitlab.RequestOptionFunc) ([]*gitlab.GroupVariable, *gitlab.Response, error)
 }
 
 type ProjectGroupPathSorter []*gitlab.ProjectGroup
@@ -78,40 +79,25 @@ func (a ProjectGroupPathSorter) Less(i, j int) bool { return len(a[i].FullPath) 
 var log = ctrl.Log.WithName("provider").WithName("gitlab")
 
 // Set gitlabBase credentials to Access Token.
-func (g *gitlabBase) getAuth(ctx context.Context) ([]byte, error) {
-	credentialsSecret := &corev1.Secret{}
-	credentialsSecretName := g.store.Auth.SecretRef.AccessToken.Name
-	if credentialsSecretName == "" {
-		return nil, fmt.Errorf(errGitlabCredSecretName)
-	}
-
-	objectKey := types.NamespacedName{
-		Name:      credentialsSecretName,
-		Namespace: g.namespace,
-	}
-	// If namespace is set, it means we must use it (non-referrent call either from local SecretStore or defined ClusterSecretStore)
-	if g.store.Auth.SecretRef.AccessToken.Namespace != nil {
-		objectKey.Namespace = *g.store.Auth.SecretRef.AccessToken.Namespace
-	}
-
-	err := g.kube.Get(ctx, objectKey, credentialsSecret)
-	if err != nil {
-		return nil, fmt.Errorf(errFetchSAKSecret, err)
-	}
-
-	credentials := credentialsSecret.Data[g.store.Auth.SecretRef.AccessToken.Key]
-	if len(credentials) == 0 {
-		return nil, fmt.Errorf(errMissingSAK)
-	}
-	return credentials, nil
+func (g *gitlabBase) getAuth(ctx context.Context) (string, error) {
+	return resolvers.SecretKeyRef(
+		ctx,
+		g.kube,
+		g.storeKind,
+		g.namespace,
+		&g.store.Auth.SecretRef.AccessToken)
 }
 
 func (g *gitlabBase) DeleteSecret(_ context.Context, _ esv1beta1.PushSecretRemoteRef) error {
-	return fmt.Errorf("not implemented")
+	return fmt.Errorf(errNotImplemented)
+}
+
+func (g *gitlabBase) SecretExists(_ context.Context, _ esv1beta1.PushSecretRemoteRef) (bool, error) {
+	return false, fmt.Errorf(errNotImplemented)
 }
 
 func (g *gitlabBase) PushSecret(_ context.Context, _ *corev1.Secret, _ esv1beta1.PushSecretData) error {
-	return fmt.Errorf("not implemented")
+	return fmt.Errorf(errNotImplemented)
 }
 
 // GetAllSecrets syncs all gitlab project and group variables into a single Kubernetes Secret.

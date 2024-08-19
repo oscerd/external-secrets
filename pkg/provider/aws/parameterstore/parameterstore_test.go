@@ -11,6 +11,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package parameterstore
 
 import (
@@ -24,7 +25,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
@@ -38,6 +42,11 @@ const (
 	invalidProp        = "INVALPROP"
 )
 
+var (
+	fakeSecretKey = "fakeSecretKey"
+	fakeValue     = "fakeValue"
+)
+
 type parameterstoreTestCase struct {
 	fakeClient     *fakeps.Client
 	apiInput       *ssm.GetParameterInput
@@ -47,6 +56,7 @@ type parameterstoreTestCase struct {
 	expectError    string
 	expectedSecret string
 	expectedData   map[string][]byte
+	prefix         string
 }
 
 func makeValidParameterStoreTestCase() *parameterstoreTestCase {
@@ -56,6 +66,7 @@ func makeValidParameterStoreTestCase() *parameterstoreTestCase {
 		apiOutput:      makeValidAPIOutput(),
 		remoteRef:      makeValidRemoteRef(),
 		apiErr:         nil,
+		prefix:         "",
 		expectError:    "",
 		expectedSecret: "",
 		expectedData:   make(map[string][]byte),
@@ -237,7 +248,7 @@ func TestDeleteSecret(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			ref := fake.PushSecretData{RemoteKey: "fake-key"}
+			ref := fake.PushSecretData{RemoteKey: remoteKey}
 			ps := ParameterStore{
 				client: &tc.args.client,
 			}
@@ -260,11 +271,12 @@ func TestDeleteSecret(t *testing.T) {
 		})
 	}
 }
+
+const remoteKey = "fake-key"
+
 func TestPushSecret(t *testing.T) {
 	invalidParameters := errors.New(ssm.ErrCodeInvalidParameters)
 	alreadyExistsError := errors.New(ssm.ErrCodeAlreadyExistsException)
-	fakeSecretKey := "fakeSecretKey"
-	fakeValue := "fakeValue"
 	fakeSecret := &corev1.Secret{
 		Data: map[string][]byte{
 			fakeSecretKey: []byte(fakeValue),
@@ -305,8 +317,9 @@ func TestPushSecret(t *testing.T) {
 	}
 
 	type args struct {
-		store  *esv1beta1.AWSProvider
-		client fakeps.Client
+		store    *esv1beta1.AWSProvider
+		metadata *apiextensionsv1.JSON
+		client   fakeps.Client
 	}
 
 	type want struct {
@@ -423,11 +436,101 @@ func TestPushSecret(t *testing.T) {
 				err: nil,
 			},
 		},
+		"SetSecretWithValidMetadata": {
+			reason: "test push secret with valid parameterStoreType metadata",
+			args: args{
+				store: makeValidParameterStore().Spec.Provider.AWS,
+				metadata: &apiextensionsv1.JSON{
+					Raw: []byte(`
+					{
+						"parameterStoreType": "SecureString", 
+						"parameterStoreKeyID": "arn:aws:kms:sa-east-1:00000000000:key/bb123123-b2b0-4f60-ac3a-44a13f0e6b6c"
+					}
+					`),
+				},
+				client: fakeps.Client{
+					PutParameterWithContextFn:        fakeps.NewPutParameterWithContextFn(putParameterOutput, nil),
+					GetParameterWithContextFn:        fakeps.NewGetParameterWithContextFn(sameGetParameterOutput, nil),
+					DescribeParametersWithContextFn:  fakeps.NewDescribeParametersWithContextFn(describeParameterOutput, nil),
+					ListTagsForResourceWithContextFn: fakeps.NewListTagsForResourceWithContextFn(validListTagsForResourceOutput, nil),
+				},
+			},
+			want: want{
+				err: nil,
+			},
+		},
+		"SetSecretWithValidMetadataListString": {
+			reason: "test push secret with valid parameterStoreType metadata and unused parameterStoreKeyID",
+			args: args{
+				store: makeValidParameterStore().Spec.Provider.AWS,
+				metadata: &apiextensionsv1.JSON{
+					Raw: []byte(`{"parameterStoreType": "StringList", "parameterStoreKeyID": "alias/aws/ssm"}`),
+				},
+				client: fakeps.Client{
+					PutParameterWithContextFn:        fakeps.NewPutParameterWithContextFn(putParameterOutput, nil),
+					GetParameterWithContextFn:        fakeps.NewGetParameterWithContextFn(sameGetParameterOutput, nil),
+					DescribeParametersWithContextFn:  fakeps.NewDescribeParametersWithContextFn(describeParameterOutput, nil),
+					ListTagsForResourceWithContextFn: fakeps.NewListTagsForResourceWithContextFn(validListTagsForResourceOutput, nil),
+				},
+			},
+			want: want{
+				err: nil,
+			},
+		},
+		"SetSecretWithInvalidMetadata": {
+			reason: "test push secret with invalid metadata structure",
+			args: args{
+				store: makeValidParameterStore().Spec.Provider.AWS,
+				metadata: &apiextensionsv1.JSON{
+					Raw: []byte(`{ fakeMetadataKey: "" }`),
+				},
+				client: fakeps.Client{
+					PutParameterWithContextFn:        fakeps.NewPutParameterWithContextFn(putParameterOutput, nil),
+					GetParameterWithContextFn:        fakeps.NewGetParameterWithContextFn(sameGetParameterOutput, nil),
+					DescribeParametersWithContextFn:  fakeps.NewDescribeParametersWithContextFn(describeParameterOutput, nil),
+					ListTagsForResourceWithContextFn: fakeps.NewListTagsForResourceWithContextFn(validListTagsForResourceOutput, nil),
+				},
+			},
+			want: want{
+				err: fmt.Errorf("failed to parse metadata: failed to parse JSON raw data: invalid character 'f' looking for beginning of object key string"),
+			},
+		},
+		"GetRemoteSecretWithoutDecryption": {
+			reason: "test if push secret's get remote source is encrypted for valid comparison",
+			args: args{
+				store: makeValidParameterStore().Spec.Provider.AWS,
+				metadata: &apiextensionsv1.JSON{
+					Raw: []byte(`
+					{
+						"parameterStoreType": "SecureString",
+						"parameterStoreKeyID": "arn:aws:kms:sa-east-1:00000000000:key/bb123123-b2b0-4f60-ac3a-44a13f0e6b6c"
+					}
+					`),
+				},
+				client: fakeps.Client{
+					PutParameterWithContextFn: fakeps.NewPutParameterWithContextFn(putParameterOutput, nil),
+					GetParameterWithContextFn: fakeps.NewGetParameterWithContextFn(&ssm.GetParameterOutput{
+						Parameter: &ssm.Parameter{
+							Type:  aws.String("SecureString"),
+							Value: aws.String("sensitive"),
+						},
+					}, nil),
+					DescribeParametersWithContextFn:  fakeps.NewDescribeParametersWithContextFn(describeParameterOutput, nil),
+					ListTagsForResourceWithContextFn: fakeps.NewListTagsForResourceWithContextFn(validListTagsForResourceOutput, nil),
+				},
+			},
+			want: want{
+				err: fmt.Errorf("unable to compare 'sensitive' result, ensure to request a decrypted value"),
+			},
+		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			psd := fake.PushSecretData{SecretKey: fakeSecretKey, RemoteKey: "fake-key"}
+			psd := fake.PushSecretData{SecretKey: fakeSecretKey, RemoteKey: remoteKey}
+			if tc.args.metadata != nil {
+				psd.Metadata = tc.args.metadata
+			}
 			ps := ParameterStore{
 				client: &tc.args.client,
 			}
@@ -448,11 +551,98 @@ func TestPushSecret(t *testing.T) {
 	}
 }
 
+func TestPushSecretWithPrefix(t *testing.T) {
+	fakeSecret := &corev1.Secret{
+		Data: map[string][]byte{
+			fakeSecretKey: []byte(fakeValue),
+		},
+	}
+	managedByESO := ssm.Tag{
+		Key:   &managedBy,
+		Value: &externalSecrets,
+	}
+	putParameterOutput := &ssm.PutParameterOutput{}
+	getParameterOutput := &ssm.GetParameterOutput{}
+	describeParameterOutput := &ssm.DescribeParametersOutput{}
+	validListTagsForResourceOutput := &ssm.ListTagsForResourceOutput{
+		TagList: []*ssm.Tag{&managedByESO},
+	}
+
+	client := fakeps.Client{
+		PutParameterWithContextFn:        fakeps.NewPutParameterWithContextFn(putParameterOutput, nil),
+		GetParameterWithContextFn:        fakeps.NewGetParameterWithContextFn(getParameterOutput, nil),
+		DescribeParametersWithContextFn:  fakeps.NewDescribeParametersWithContextFn(describeParameterOutput, nil),
+		ListTagsForResourceWithContextFn: fakeps.NewListTagsForResourceWithContextFn(validListTagsForResourceOutput, nil),
+	}
+
+	psd := fake.PushSecretData{SecretKey: fakeSecretKey, RemoteKey: remoteKey}
+	ps := ParameterStore{
+		client: &client,
+		prefix: "/test/this/thing/",
+	}
+	err := ps.PushSecret(context.TODO(), fakeSecret, psd)
+	require.NoError(t, err)
+
+	input := client.PutParameterWithContextFnCalledWith[0][0]
+	assert.Equal(t, "/test/this/thing/fake-key", *input.Name)
+}
+
+func TestPushSecretCalledOnlyOnce(t *testing.T) {
+	fakeSecret := &corev1.Secret{
+		Data: map[string][]byte{
+			fakeSecretKey: []byte(fakeValue),
+		},
+	}
+
+	managedByESO := ssm.Tag{
+		Key:   &managedBy,
+		Value: &externalSecrets,
+	}
+
+	putParameterOutput := &ssm.PutParameterOutput{}
+	validGetParameterOutput := &ssm.GetParameterOutput{
+		Parameter: &ssm.Parameter{
+			Value: &fakeValue,
+		},
+	}
+	describeParameterOutput := &ssm.DescribeParametersOutput{}
+	validListTagsForResourceOutput := &ssm.ListTagsForResourceOutput{
+		TagList: []*ssm.Tag{&managedByESO},
+	}
+
+	client := fakeps.Client{
+		PutParameterWithContextFn:        fakeps.NewPutParameterWithContextFn(putParameterOutput, nil),
+		GetParameterWithContextFn:        fakeps.NewGetParameterWithContextFn(validGetParameterOutput, nil),
+		DescribeParametersWithContextFn:  fakeps.NewDescribeParametersWithContextFn(describeParameterOutput, nil),
+		ListTagsForResourceWithContextFn: fakeps.NewListTagsForResourceWithContextFn(validListTagsForResourceOutput, nil),
+	}
+
+	psd := fake.PushSecretData{SecretKey: fakeSecretKey, RemoteKey: remoteKey}
+	ps := ParameterStore{
+		client: &client,
+	}
+
+	require.NoError(t, ps.PushSecret(context.TODO(), fakeSecret, psd))
+
+	assert.Equal(t, 0, client.PutParameterWithContextCalledN)
+}
+
 // test the ssm<->aws interface
 // make sure correct values are passed and errors are handled accordingly.
 func TestGetSecret(t *testing.T) {
 	// good case: key is passed in, output is sent back
 	setSecretString := func(pstc *parameterstoreTestCase) {
+		pstc.apiOutput.Parameter.Value = aws.String("RRRRR")
+		pstc.expectedSecret = "RRRRR"
+	}
+
+	// good case: key is passed in and prefix is set, output is sent back
+	setSecretStringWithPrefix := func(pstc *parameterstoreTestCase) {
+		pstc.apiInput = &ssm.GetParameterInput{
+			Name:           aws.String("/test/this/baz"),
+			WithDecryption: aws.Bool(true),
+		}
+		pstc.prefix = "/test/this"
 		pstc.apiOutput.Parameter.Value = aws.String("RRRRR")
 		pstc.expectedSecret = "RRRRR"
 	}
@@ -463,6 +653,7 @@ func TestGetSecret(t *testing.T) {
 		pstc.expectedSecret = "bang"
 		pstc.remoteRef.Property = "/shmoo"
 	}
+
 	// good case: extract property with `.`
 	setExtractPropertyWithDot := func(pstc *parameterstoreTestCase) {
 		pstc.apiOutput.Parameter.Value = aws.String(`{"/shmoo.boom": "bang"}`)
@@ -537,6 +728,7 @@ func TestGetSecret(t *testing.T) {
 	}
 
 	successCases := []*parameterstoreTestCase{
+		makeValidParameterStoreTestCaseCustom(setSecretStringWithPrefix),
 		makeValidParameterStoreTestCaseCustom(setSecretString),
 		makeValidParameterStoreTestCaseCustom(setExtractProperty),
 		makeValidParameterStoreTestCaseCustom(setMissingProperty),
@@ -553,6 +745,7 @@ func TestGetSecret(t *testing.T) {
 	ps := ParameterStore{}
 	for k, v := range successCases {
 		ps.client = v.fakeClient
+		ps.prefix = v.prefix
 		out, err := ps.GetSecret(context.Background(), *v.remoteRef)
 		if !ErrorContains(err, v.expectError) {
 			t.Errorf("[%d] unexpected error: %s, expected: '%s'", k, err.Error(), v.expectError)

@@ -29,6 +29,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
@@ -311,6 +312,96 @@ func TestManagerGet(t *testing.T) {
 	}
 }
 
+func TestShouldProcessSecret(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = esv1beta1.AddToScheme(scheme)
+	_ = apiextensionsv1.AddToScheme(scheme)
+
+	testNamespace := "test-a"
+	testCases := []struct {
+		name       string
+		conditions []esv1beta1.ClusterSecretStoreCondition
+		namespace  *corev1.Namespace
+		wantErr    string
+		want       bool
+	}{
+		{
+			name: "processes a regex condition",
+			conditions: []esv1beta1.ClusterSecretStoreCondition{
+				{
+					NamespaceRegexes: []string{`test-*`},
+				},
+			},
+			namespace: &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testNamespace,
+				},
+			},
+			want: true,
+		},
+		{
+			name: "process multiple regexes",
+			conditions: []esv1beta1.ClusterSecretStoreCondition{
+				{
+					NamespaceRegexes: []string{`nope`, `test-*`},
+				},
+			},
+			namespace: &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testNamespace,
+				},
+			},
+			want: true,
+		},
+		{
+			name: "shouldn't process if nothing matches",
+			conditions: []esv1beta1.ClusterSecretStoreCondition{
+				{
+					NamespaceRegexes: []string{`nope`},
+				},
+			},
+			namespace: &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testNamespace,
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeSpec := esv1beta1.SecretStoreSpec{
+				Conditions: tt.conditions,
+			}
+
+			defaultStore := &esv1beta1.ClusterSecretStore{
+				TypeMeta: metav1.TypeMeta{Kind: esv1beta1.ClusterSecretStoreKind},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "foo",
+					Namespace: tt.namespace.Name,
+				},
+				Spec: fakeSpec,
+			}
+
+			client := fakeclient.NewClientBuilder().WithScheme(scheme).WithObjects(defaultStore, tt.namespace).Build()
+			clientMap := make(map[clientKey]*clientVal)
+			mgr := &Manager{
+				log:             logr.Discard(),
+				client:          client,
+				enableFloodgate: true,
+				clientMap:       clientMap,
+			}
+
+			got, err := mgr.shouldProcessSecret(defaultStore, tt.namespace.Name)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 type WrapProvider struct {
 	newClientFunc func(
 		context.Context,
@@ -344,8 +435,8 @@ func (f *WrapProvider) Capabilities() esv1beta1.SecretStoreCapabilities {
 }
 
 // ValidateStore checks if the provided store is valid.
-func (f *WrapProvider) ValidateStore(_ esv1beta1.GenericStore) error {
-	return nil
+func (f *WrapProvider) ValidateStore(_ esv1beta1.GenericStore) (admission.Warnings, error) {
+	return nil, nil
 }
 
 type MockFakeClient struct {
@@ -359,6 +450,10 @@ func (c *MockFakeClient) PushSecret(_ context.Context, _ *corev1.Secret, _ esv1b
 
 func (c *MockFakeClient) DeleteSecret(_ context.Context, _ esv1beta1.PushSecretRemoteRef) error {
 	return nil
+}
+
+func (c *MockFakeClient) SecretExists(_ context.Context, _ esv1beta1.PushSecretRemoteRef) (bool, error) {
+	return false, nil
 }
 
 func (c *MockFakeClient) GetSecret(_ context.Context, _ esv1beta1.ExternalSecretDataRemoteRef) ([]byte, error) {

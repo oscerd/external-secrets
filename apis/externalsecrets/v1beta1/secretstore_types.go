@@ -56,7 +56,12 @@ type ClusterSecretStoreCondition struct {
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
 
 	// Choose namespaces by name
+	// +optional
 	Namespaces []string `json:"namespaces,omitempty"`
+
+	// Choose namespaces by using regex matching
+	// +optional
+	NamespaceRegexes []string `json:"namespaceRegexes,omitempty"`
 }
 
 // SecretStoreProvider contains the provider-specific configuration.
@@ -74,6 +79,10 @@ type SecretStoreProvider struct {
 	// Akeyless configures this store to sync secrets using Akeyless Vault provider
 	// +optional
 	Akeyless *AkeylessProvider `json:"akeyless,omitempty"`
+
+	// BitwardenSecretsManager configures this store to sync secrets using BitwardenSecretsManager provider
+	// +optional
+	BitwardenSecretsManager *BitwardenSecretsManagerProvider `json:"bitwardensecretsmanager,omitempty"`
 
 	// Vault configures this store to sync secrets using Hashi provider
 	// +optional
@@ -135,6 +144,10 @@ type SecretStoreProvider struct {
 	// +optional
 	Doppler *DopplerProvider `json:"doppler,omitempty"`
 
+	// Onboardbase configures this store to sync secrets using the Onboardbase provider
+	// +optional
+	Onboardbase *OnboardbaseProvider `json:"onboardbase,omitempty"`
+
 	// KeeperSecurity configures this store to sync secrets using the KeeperSecurity provider
 	// +optional
 	KeeperSecurity *KeeperSecurityProvider `json:"keepersecurity,omitempty"`
@@ -147,6 +160,41 @@ type SecretStoreProvider struct {
 	// https://docs.delinea.com/online-help/products/devops-secrets-vault/current
 	// +optional
 	Delinea *DelineaProvider `json:"delinea,omitempty"`
+
+	// SecretServer configures this store to sync secrets using SecretServer provider
+	// https://docs.delinea.com/online-help/secret-server/start.htm
+	// +optional
+	SecretServer *SecretServerProvider `json:"secretserver,omitempty"`
+
+	// Chef configures this store to sync secrets with chef server
+	// +optional
+	Chef *ChefProvider `json:"chef,omitempty"`
+
+	// Pulumi configures this store to sync secrets using the Pulumi provider
+	// +optional
+	Pulumi *PulumiProvider `json:"pulumi,omitempty"`
+
+	// Fortanix configures this store to sync secrets using the Fortanix provider
+	// +optional
+	Fortanix *FortanixProvider `json:"fortanix,omitempty"`
+
+	// +optional
+	PasswordDepot *PasswordDepotProvider `json:"passworddepot,omitempty"`
+
+	// +optional
+	Passbolt *PassboltProvider `json:"passbolt,omitempty"`
+
+	// Device42 configures this store to sync secrets using the Device42 provider
+	// +optional
+	Device42 *Device42Provider `json:"device42,omitempty"`
+
+	// Infisical configures this store to sync secrets using the Infisical provider
+	// +optional
+	Infisical *InfisicalProvider `json:"infisical,omitempty"`
+
+	// Beyondtrust configures this store to sync secrets using Password Safe provider.
+	// +optional
+	Beyondtrust *BeyondtrustProvider `json:"beyondtrust,omitempty"`
 }
 
 type CAProviderType string
@@ -233,6 +281,7 @@ type SecretStoreStatus struct {
 // +kubebuilder:printcolumn:name="Capabilities",type=string,JSONPath=`.status.capabilities`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:subresource:status
+// +kubebuilder:metadata:labels="external-secrets.io/component=controller"
 // +kubebuilder:resource:scope=Namespaced,categories={externalsecrets},shortName=ss
 type SecretStore struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -260,6 +309,7 @@ type SecretStoreList struct {
 // +kubebuilder:printcolumn:name="Capabilities",type=string,JSONPath=`.status.capabilities`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:subresource:status
+// +kubebuilder:metadata:labels="external-secrets.io/component=controller"
 // +kubebuilder:resource:scope=Cluster,categories={externalsecrets},shortName=css
 type ClusterSecretStore struct {
 	metav1.TypeMeta   `json:",inline"`

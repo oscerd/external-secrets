@@ -5,7 +5,7 @@ SHELL         := /bin/bash
 MAKEFLAGS     += --warn-undefined-variables
 .SHELLFLAGS   := -euo pipefail -c
 
-ARCH ?= amd64 arm64
+ARCH ?= amd64 arm64 ppc64le
 BUILD_ARGS ?= CGO_ENABLED=0
 DOCKER_BUILD_ARGS ?=
 DOCKERFILE ?= Dockerfile
@@ -146,6 +146,7 @@ run: generate ## Run app locally (without a k8s cluster)
 
 manifests: helm.generate ## Generate manifests from helm chart
 	mkdir -p $(OUTPUT_DIR)/deploy/manifests
+	helm dependency build $(HELM_DIR)
 	helm template external-secrets $(HELM_DIR) -f deploy/manifests/helm-values.yaml > $(OUTPUT_DIR)/deploy/manifests/external-secrets.yaml
 
 crds.install: generate ## Install CRDs into a cluster. This is for convenience
@@ -153,6 +154,9 @@ crds.install: generate ## Install CRDs into a cluster. This is for convenience
 
 crds.uninstall: ## Uninstall CRDs from a cluster. This is for convenience
 	kubectl delete -f $(BUNDLE_DIR)
+
+tilt-up: tilt manifests ## Generates the local manifests that tilt will use to deploy the controller's objects.
+	$(LOCALBIN)/tilt up
 
 # ====================================================================================
 # Helm Chart
@@ -254,22 +258,22 @@ docker.promote: ## Promote the docker image to the registry
 # ====================================================================================
 # Terraform
 
-tf.plan.%: ## Runs terrform plan for a provider
+tf.plan.%: ## Runs terraform plan for a provider
 	@cd $(TF_DIR)/$*; \
 	terraform init; \
 	terraform plan
 
-tf.apply.%: ## Runs terrform apply for a provider
+tf.apply.%: ## Runs terraform apply for a provider
 	@cd $(TF_DIR)/$*; \
 	terraform init; \
 	terraform apply -auto-approve
 
-tf.destroy.%: ## Runs terrform destroy for a provider
+tf.destroy.%: ## Runs terraform destroy for a provider
 	@cd $(TF_DIR)/$*; \
 	terraform init; \
 	terraform destroy -auto-approve
 
-tf.show.%: ## Runs terrform show for a provider and outputs to a file
+tf.show.%: ## Runs terraform show for a provider and outputs to a file
 	@cd $(TF_DIR)/$*; \
 	terraform init; \
 	terraform plan -out tfplan.binary; \
@@ -293,18 +297,34 @@ clean:  ## Clean bins
 # ====================================================================================
 # Build Dependencies
 
+ifeq ($(OS),Windows_NT)     # is Windows_NT on XP, 2000, 7, Vista, 10...
+    detected_OS := windows
+    arch := x86_64
+else
+    detected_OS := $(shell uname -s)
+    arch := $(shell uname -m)
+    ifeq ($(detected_OS),Darwin)
+    	detected_OS := mac
+    endif
+    ifeq ($(detected_OS),Linux)
+    	detected_OS := linux
+    endif
+endif
+
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
 ## Tool Binaries
+TILT ?= $(LOCALBIN)/tilt
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 
 ## Tool Versions
-GOLANGCI_VERSION := 1.54.2
-KUBERNETES_VERSION := 1.28.x
+GOLANGCI_VERSION := 1.57.2
+KUBERNETES_VERSION := 1.30.x
+TILT_VERSION := 0.33.10
 
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
@@ -317,3 +337,9 @@ golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	test -s $(LOCALBIN)/golangci-lint && $(LOCALBIN)/golangci-lint version --format short | grep -q $(GOLANGCI_VERSION) || \
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) v$(GOLANGCI_VERSION)
+
+.PHONY: tilt
+.PHONY: $(TILT)
+tilt: $(TILT) ## Download tilt locally if necessary. Architecture is locked at x86_64.
+$(TILT): $(LOCALBIN)
+	test -s $(LOCALBIN)/tilt || curl -fsSL https://github.com/tilt-dev/tilt/releases/download/v$(TILT_VERSION)/tilt.$(TILT_VERSION).$(detected_OS).$(arch).tar.gz | tar -xz -C $(LOCALBIN) tilt

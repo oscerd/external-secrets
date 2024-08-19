@@ -11,6 +11,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package secretmanager
 
 import (
@@ -18,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 
@@ -50,7 +52,6 @@ const (
 	errClientClose                  = "unable to close SecretManager client: %w"
 	errMissingStoreSpec             = "invalid: missing store spec"
 	errFetchSAKSecret               = "could not fetch SecretAccessKey secret: %w"
-	errMissingSAK                   = "missing SecretAccessKey"
 	errUnableProcessJSONCredentials = "failed to process the provided JSON credentials: %w"
 	errUnableCreateGCPSMClient      = "failed to create GCP secretmanager client: %w"
 	errUninitalizedGCPProvider      = "provider GCP is not initialized"
@@ -129,13 +130,29 @@ func parseError(err error) error {
 	return err
 }
 
+func (c *Client) SecretExists(_ context.Context, _ esv1beta1.PushSecretRemoteRef) (bool, error) {
+	return false, fmt.Errorf("not implemented")
+}
+
 // PushSecret pushes a kubernetes secret key into gcp provider Secret.
 func (c *Client) PushSecret(ctx context.Context, secret *corev1.Secret, pushSecretData esv1beta1.PushSecretData) error {
+	var (
+		payload []byte
+		err     error
+	)
 	if pushSecretData.GetSecretKey() == "" {
-		return fmt.Errorf("pushing the whole secret is not yet implemented")
+		// Must convert secret values to string, otherwise data will be sent as base64 to Vault
+		secretStringVal := make(map[string]string)
+		for k, v := range secret.Data {
+			secretStringVal[k] = string(v)
+		}
+		payload, err = utils.JSONMarshal(secretStringVal)
+		if err != nil {
+			return fmt.Errorf("failed to serialize secret content as JSON: %w", err)
+		}
+	} else {
+		payload = secret.Data[pushSecretData.GetSecretKey()]
 	}
-
-	payload := secret.Data[pushSecretData.GetSecretKey()]
 	secretName := fmt.Sprintf("projects/%s/secrets/%s", c.store.ProjectID, pushSecretData.GetRemoteKey())
 	gcpSecret, err := c.smClient.GetSecret(ctx, &secretmanagerpb.GetSecretRequest{
 		Name: secretName,
@@ -147,6 +164,26 @@ func (c *Client) PushSecret(ctx context.Context, secret *corev1.Secret, pushSecr
 			return err
 		}
 
+		var replication = &secretmanagerpb.Replication{
+			Replication: &secretmanagerpb.Replication_Automatic_{
+				Automatic: &secretmanagerpb.Replication_Automatic{},
+			},
+		}
+
+		if c.store.Location != "" {
+			replication = &secretmanagerpb.Replication{
+				Replication: &secretmanagerpb.Replication_UserManaged_{
+					UserManaged: &secretmanagerpb.Replication_UserManaged{
+						Replicas: []*secretmanagerpb.Replication_UserManaged_Replica{
+							{
+								Location: c.store.Location,
+							},
+						},
+					},
+				},
+			}
+		}
+
 		gcpSecret, err = c.smClient.CreateSecret(ctx, &secretmanagerpb.CreateSecretRequest{
 			Parent:   fmt.Sprintf("projects/%s", c.store.ProjectID),
 			SecretId: pushSecretData.GetRemoteKey(),
@@ -154,11 +191,7 @@ func (c *Client) PushSecret(ctx context.Context, secret *corev1.Secret, pushSecr
 				Labels: map[string]string{
 					managedByKey: managedByValue,
 				},
-				Replication: &secretmanagerpb.Replication{
-					Replication: &secretmanagerpb.Replication_Automatic_{
-						Automatic: &secretmanagerpb.Replication_Automatic{},
-					},
-				},
+				Replication: replication,
 			},
 		})
 		metrics.ObserveAPICall(constants.ProviderGCPSM, constants.CallGCPSMCreateSecret, err)
@@ -177,14 +210,30 @@ func (c *Client) PushSecret(ctx context.Context, secret *corev1.Secret, pushSecr
 		return err
 	}
 
-	if !mapEqual(gcpSecret.Annotations, annotations) || !mapEqual(gcpSecret.Labels, labels) {
+	if !maps.Equal(gcpSecret.Annotations, annotations) || !maps.Equal(gcpSecret.Labels, labels) {
+		scrt := &secretmanagerpb.Secret{
+			Name:        gcpSecret.Name,
+			Etag:        gcpSecret.Etag,
+			Labels:      labels,
+			Annotations: annotations,
+		}
+
+		if c.store.Location != "" {
+			scrt.Replication = &secretmanagerpb.Replication{
+				Replication: &secretmanagerpb.Replication_UserManaged_{
+					UserManaged: &secretmanagerpb.Replication_UserManaged{
+						Replicas: []*secretmanagerpb.Replication_UserManaged_Replica{
+							{
+								Location: c.store.Location,
+							},
+						},
+					},
+				},
+			}
+		}
+
 		_, err = c.smClient.UpdateSecret(ctx, &secretmanagerpb.UpdateSecretRequest{
-			Secret: &secretmanagerpb.Secret{
-				Name:        gcpSecret.Name,
-				Etag:        gcpSecret.Etag,
-				Labels:      labels,
-				Annotations: annotations,
-			},
+			Secret: scrt,
 			UpdateMask: &field_mask.FieldMask{
 				Paths: []string{"labels", "annotations"},
 			},
@@ -543,18 +592,4 @@ func getDataByProperty(data []byte, property string) gjson.Result {
 		}
 	}
 	return gjson.Get(payload, property)
-}
-
-func mapEqual(m1, m2 map[string]string) bool {
-	if len(m1) != len(m2) {
-		return false
-	}
-
-	for k1, v1 := range m1 {
-		if v2, ok := m2[k1]; !ok || v1 != v2 {
-			return false
-		}
-	}
-
-	return true
 }

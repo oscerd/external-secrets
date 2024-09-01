@@ -15,8 +15,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"reflect"
-
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
@@ -36,23 +34,8 @@ var (
 	AddToScheme   = SchemeBuilder.AddToScheme
 )
 
-// Fake type metadata.
-var (
-	FakeKind             = reflect.TypeOf(Fake{}).Name()
-	FakeGroupKind        = schema.GroupKind{Group: Group, Kind: FakeKind}.String()
-	FakeKindAPIVersion   = FakeKind + "." + SchemeGroupVersion.String()
-	FakeGroupVersionKind = SchemeGroupVersion.WithKind(FakeKind)
-)
-
-// Gitlab type metadata.
-var (
-	GitlabKind             = reflect.TypeOf(Gitlab{}).Name()
-	GitlabGroupKind        = schema.GroupKind{Group: Group, Kind: GitlabKind}.String()
-	GitlabKindAPIVersion   = GitlabKind + "." + SchemeGroupVersion.String()
-	GitlabGroupVersionKind = SchemeGroupVersion.WithKind(GitlabKind)
-)
-
 func init() {
 	SchemeBuilder.Register(&Fake{}, &FakeList{})
 	SchemeBuilder.Register(&Gitlab{}, &GitlabList{})
+	SchemeBuilder.Register(&Akeyless{}, &AkeylessList{})
 }

@@ -12,14 +12,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1alpha1
 
 import (
+	"reflect"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
 )
 
-// AkeylessProvider Configures an store to sync secrets using Akeyless KV.
-type AkeylessProvider struct {
+// AkeylessSpec Configures an store to sync secrets using Akeyless KV.
+type AkeylessSpec struct {
 
 	// Akeyless GW API Url from which the secrets to be fetched from.
 	AkeylessGWApiURL *string `json:"akeylessGWApiURL"`
@@ -83,3 +88,34 @@ type AkeylessKubernetesAuth struct {
 	// +optional
 	SecretRef *esmeta.SecretKeySelector `json:"secretRef,omitempty"`
 }
+
+// +kubebuilder:object:root=true
+// +kubebuilder:storageversion
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster,categories={akeyless},shortName=akeyless
+type Akeyless struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec AkeylessSpec `json:"spec,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// AkeylessList contains a list of ExternalSecret resources.
+type AkeylessList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []Gitlab `json:"items"`
+}
+
+func init() {
+}
+
+// Akeyless type metadata.
+var (
+	AkeylessKind             = reflect.TypeOf(Gitlab{}).Name()
+	AkeylessoupKind          = schema.GroupKind{Group: Group, Kind: AkeylessKind}.String()
+	AkeylessKindAPIVersion   = AkeylessKind + "." + SchemeGroupVersion.String()
+	AkeylessGroupVersionKind = SchemeGroupVersion.WithKind(AkeylessKind)
+)

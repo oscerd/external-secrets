@@ -38,6 +38,7 @@ import (
 
 	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
+	prov "github.com/external-secrets/external-secrets/apis/providers/v1alpha1"
 	"github.com/external-secrets/external-secrets/pkg/find"
 	"github.com/external-secrets/external-secrets/pkg/utils"
 )
@@ -52,12 +53,14 @@ var _ esv1beta1.SecretsClient = &Akeyless{}
 var _ esv1beta1.Provider = &Provider{}
 
 // Provider satisfies the provider interface.
-type Provider struct{}
+type Provider struct {
+	storeKind string
+}
 
 // akeylessBase satisfies the provider.SecretsClient interface.
 type akeylessBase struct {
 	kube      client.Client
-	store     esv1beta1.GenericStore
+	store     prov.AkeylessSpec
 	storeKind string
 	corev1    typedcorev1.CoreV1Interface
 	namespace string
@@ -89,8 +92,20 @@ func init() {
 	})
 }
 
-func (p *Provider) Convert(_ esv1beta1.GenericStore) (client.Object, error) {
-	return nil, nil
+func (p *Provider) Convert(in esv1beta1.GenericStore) (client.Object, error) {
+	out := &prov.Akeyless{}
+	tmp := map[string]interface{}{
+		"spec": in.GetSpec().Provider.Fake,
+	}
+	d, err := json.Marshal(tmp)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(d, out)
+	if err != nil {
+		return nil, fmt.Errorf("could not convert %v in a valid fake provider: %w", in.GetName(), err)
+	}
+	return out, nil
 }
 
 // Capabilities return the provider supported capabilities (ReadOnly, WriteOnly, ReadWrite).
@@ -98,16 +113,35 @@ func (p *Provider) Capabilities() esv1beta1.SecretStoreCapabilities {
 	return esv1beta1.SecretStoreReadOnly
 }
 
-func (p *Provider) ApplyReferent(spec client.Object, _ esmeta.ReferentCallOrigin, _ string) (client.Object, error) {
+func (p *Provider) ApplyReferent(spec client.Object, caller esmeta.ReferentCallOrigin, namespace string) (client.Object, error) {
+	converted, ok := spec.(*prov.Akeyless)
+	if !ok {
+		return nil, fmt.Errorf("could not convert source object %v into 'fake' provider type: object from type %T", spec.GetName(), spec)
+	}
+	ns := &namespace
+	out := converted.DeepCopy()
+	switch caller {
+	case esmeta.ReferentCallProvider:
+	case esmeta.ReferentCallSecretStore:
+		out.Spec.Auth.SecretRef.AccessID.Namespace = ns
+		out.Spec.Auth.SecretRef.AccessType.Namespace = ns
+		out.Spec.Auth.SecretRef.AccessTypeParam.Namespace = ns
+		out.Spec.Auth.KubernetesAuth.ServiceAccountRef.Namespace = ns
+	case esmeta.ReferentCallClusterSecretStore:
+		// compatibility with utils.SecretKeyRef
+		p.storeKind = esv1beta1.ClusterSecretStoreKind
+	default:
+	}
+
 	return spec, nil
 }
 
-func (p *Provider) NewClientFromObj(_ context.Context, _ client.Object, _ client.Client, _ string) (esv1beta1.SecretsClient, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-// NewClient constructs a new secrets client based on the provided store.
-func (p *Provider) NewClient(ctx context.Context, store esv1beta1.GenericStore, kube client.Client, namespace string) (esv1beta1.SecretsClient, error) {
+func (p *Provider) NewClientFromObj(ctx context.Context, in client.Object, kube client.Client, namespace string) (esv1beta1.SecretsClient, error) {
+	obj, ok := in.(*prov.Akeyless)
+	if !ok {
+		return nil, errors.New("could not load akeyless provider")
+	}
+	store := obj.Spec
 	// controller-runtime/client does not support TokenRequest or other subresource APIs
 	// so we need to construct our own client and use it to fetch tokens
 	// (for Kubernetes service account token auth)
@@ -121,6 +155,11 @@ func (p *Provider) NewClient(ctx context.Context, store esv1beta1.GenericStore, 
 	}
 
 	return newClient(ctx, store, kube, clientset.CoreV1(), namespace)
+}
+
+// NewClient constructs a new secrets client based on the provided store.
+func (p *Provider) NewClient(ctx context.Context, store esv1beta1.GenericStore, kube client.Client, namespace string) (esv1beta1.SecretsClient, error) {
+	return nil, errors.New("no longer supported")
 }
 
 func (p *Provider) ValidateStore(store esv1beta1.GenericStore) (admission.Warnings, error) {
@@ -191,21 +230,17 @@ func (p *Provider) ValidateStore(store esv1beta1.GenericStore) (admission.Warnin
 	return nil, nil
 }
 
-func newClient(ctx context.Context, store esv1beta1.GenericStore, kube client.Client, corev1 typedcorev1.CoreV1Interface, namespace string) (esv1beta1.SecretsClient, error) {
+func newClient(ctx context.Context, store prov.AkeylessSpec, kube client.Client, corev1 typedcorev1.CoreV1Interface, namespace string) (esv1beta1.SecretsClient, error) {
 	akl := &akeylessBase{
 		kube:      kube,
 		store:     store,
 		namespace: namespace,
 		corev1:    corev1,
-		storeKind: store.GetObjectKind().GroupVersionKind().Kind,
 	}
 
-	spec, err := GetAKeylessProvider(store)
-	if err != nil {
-		return nil, err
-	}
+	spec := store
 	akeylessGwAPIURL := defaultAPIUrl
-	if spec != nil && spec.AkeylessGWApiURL != nil && *spec.AkeylessGWApiURL != "" {
+	if spec.AkeylessGWApiURL != nil && *spec.AkeylessGWApiURL != "" {
 		akeylessGwAPIURL = getV2Url(*spec.AkeylessGWApiURL)
 	}
 
@@ -213,7 +248,7 @@ func newClient(ctx context.Context, store esv1beta1.GenericStore, kube client.Cl
 		return nil, fmt.Errorf("missing Auth in store config")
 	}
 
-	client, err := akl.getAkeylessHTTPClient(ctx, spec)
+	client, err := akl.getAkeylessHTTPClient(ctx, &spec)
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +452,7 @@ func (a *Akeyless) GetSecretMap(ctx context.Context, ref esv1beta1.ExternalSecre
 	return secretData, nil
 }
 
-func (a *akeylessBase) getAkeylessHTTPClient(ctx context.Context, provider *esv1beta1.AkeylessProvider) (*http.Client, error) {
+func (a *akeylessBase) getAkeylessHTTPClient(ctx context.Context, provider *prov.AkeylessSpec) (*http.Client, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	if len(provider.CABundle) == 0 && provider.CAProvider == nil {
 		return client, nil

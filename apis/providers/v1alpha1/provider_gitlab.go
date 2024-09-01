@@ -15,7 +15,10 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"reflect"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
 )
@@ -72,3 +75,11 @@ type GitlabList struct {
 
 func init() {
 }
+
+// Gitlab type metadata.
+var (
+	GitlabKind             = reflect.TypeOf(Gitlab{}).Name()
+	GitlabGroupKind        = schema.GroupKind{Group: Group, Kind: GitlabKind}.String()
+	GitlabKindAPIVersion   = GitlabKind + "." + SchemeGroupVersion.String()
+	GitlabGroupVersionKind = SchemeGroupVersion.WithKind(GitlabKind)
+)

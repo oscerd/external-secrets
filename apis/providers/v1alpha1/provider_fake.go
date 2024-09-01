@@ -15,7 +15,10 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"reflect"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // FakeSpec contains the static data.
@@ -52,3 +55,11 @@ type FakeList struct {
 
 func init() {
 }
+
+// Fake type metadata.
+var (
+	FakeKind             = reflect.TypeOf(Fake{}).Name()
+	FakeGroupKind        = schema.GroupKind{Group: Group, Kind: FakeKind}.String()
+	FakeKindAPIVersion   = FakeKind + "." + SchemeGroupVersion.String()
+	FakeGroupVersionKind = SchemeGroupVersion.WithKind(FakeKind)
+)

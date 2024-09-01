@@ -15,14 +15,11 @@ limitations under the License.
 package akeyless
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
-
-	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 )
 
 const (
@@ -43,25 +40,6 @@ const (
 	errGetKubeSATokenRequest        = "cannot request Kubernetes service account token for service account %q: %w"
 	errInvalidKubeSA                = "invalid Auth.Kubernetes.ServiceAccountRef: %w"
 )
-
-// GetAKeylessProvider does the necessary nil checks and returns the akeyless provider or an error.
-func GetAKeylessProvider(store esv1beta1.GenericStore) (*esv1beta1.AkeylessProvider, error) {
-	if store == nil {
-		return nil, fmt.Errorf(errNilStore)
-	}
-	spc := store.GetSpec()
-	if spc == nil {
-		return nil, fmt.Errorf(errMissingStoreSpec)
-	}
-	if spc.Provider == nil {
-		return nil, fmt.Errorf(errMissingProvider)
-	}
-	prov := spc.Provider.Akeyless
-	if prov == nil {
-		return nil, fmt.Errorf(errInvalidProvider, store.GetObjectMeta().String())
-	}
-	return prov, nil
-}
 
 func getV2Url(path string) string {
 	// add check if not v2

@@ -111,7 +111,7 @@ func makeValidSecretStoreWithCerts() *esv1beta1.SecretStore {
 
 func makeValidSecretStoreWithK8sCerts(isSecret bool) *esv1beta1.SecretStore {
 	store := makeSecretStore()
-	caProvider := &esv1beta1.CAProvider{
+	caProvider := &esmeta.CAProvider{
 		Name: vaultCert,
 		Key:  "cert",
 	}
@@ -150,7 +150,7 @@ func makeInvalidClusterSecretStoreWithK8sCerts() *esv1beta1.ClusterSecretStore {
 							},
 						},
 					},
-					CAProvider: &esv1beta1.CAProvider{
+					CAProvider: &esmeta.CAProvider{
 						Name: vaultCert,
 						Key:  "cert",
 						Type: "Secret",

@@ -28,8 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 	genv1alpha1 "github.com/external-secrets/external-secrets/apis/generators/v1alpha1"
+	prov "github.com/external-secrets/external-secrets/apis/providers/v1alpha1"
 	awsauth "github.com/external-secrets/external-secrets/pkg/provider/aws/auth"
 )
 
@@ -62,9 +62,9 @@ func (g *Generator) generate(
 	}
 	sess, err := awsauth.NewGeneratorSession(
 		ctx,
-		esv1beta1.AWSAuth{
-			SecretRef: (*esv1beta1.AWSAuthSecretRef)(res.Spec.Auth.SecretRef),
-			JWTAuth:   (*esv1beta1.AWSJWTAuth)(res.Spec.Auth.JWTAuth),
+		prov.AWSAuth{
+			SecretRef: (*prov.AWSAuthSecretRef)(res.Spec.Auth.SecretRef),
+			JWTAuth:   (*prov.AWSJWTAuth)(res.Spec.Auth.JWTAuth),
 		},
 		res.Spec.Role,
 		res.Spec.Region,

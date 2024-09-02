@@ -36,6 +36,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
+	prov "github.com/external-secrets/external-secrets/apis/providers/v1alpha1"
 	"github.com/external-secrets/external-secrets/pkg/constants"
 	"github.com/external-secrets/external-secrets/pkg/find"
 	"github.com/external-secrets/external-secrets/pkg/metrics"
@@ -59,7 +60,7 @@ type SecretsManager struct {
 	client       SMInterface
 	referentAuth bool
 	cache        map[string]*awssm.GetSecretValueOutput
-	config       *esv1beta1.SecretsManager
+	config       *prov.SecretsManager
 }
 
 // SMInterface is a subset of the smiface api.
@@ -84,7 +85,7 @@ const (
 var log = ctrl.Log.WithName("provider").WithName("aws").WithName("secretsmanager")
 
 // New creates a new SecretsManager client.
-func New(sess *session.Session, cfg *aws.Config, secretsManagerCfg *esv1beta1.SecretsManager, referentAuth bool) (*SecretsManager, error) {
+func New(sess *session.Session, cfg *aws.Config, secretsManagerCfg *prov.SecretsManager, referentAuth bool) (*SecretsManager, error) {
 	return &SecretsManager{
 		sess:         sess,
 		client:       awssm.New(sess, cfg),

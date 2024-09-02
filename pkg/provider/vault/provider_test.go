@@ -270,7 +270,7 @@ MIIFkTCCA3mgAwIBAgIUBEUg3m/WqAsWHG4Q/II3IePFfuowDQYJKoZIhvcNAQELBQAwWDELMAkGA1UE
 			reason: "Should return error if given an invalid Retry Interval.",
 			args: args{
 				store: makeSecretStore(func(s *esv1beta1.SecretStore) {
-					s.Spec.RetrySettings = &esv1beta1.SecretStoreRetrySettings{
+					s.Spec.RetrySettings = &esmeta.RetrySettings{
 						MaxRetries:    ptr.To(int32(3)),
 						RetryInterval: ptr.To("not-an-interval"),
 					}
@@ -284,7 +284,7 @@ MIIFkTCCA3mgAwIBAgIUBEUg3m/WqAsWHG4Q/II3IePFfuowDQYJKoZIhvcNAQELBQAwWDELMAkGA1UE
 			reason: "Should return a Vault provider with custom retry settings",
 			args: args{
 				store: makeSecretStore(func(s *esv1beta1.SecretStore) {
-					s.Spec.RetrySettings = &esv1beta1.SecretStoreRetrySettings{
+					s.Spec.RetrySettings = &esmeta.RetrySettings{
 						MaxRetries:    ptr.To(int32(3)),
 						RetryInterval: ptr.To("10m"),
 					}

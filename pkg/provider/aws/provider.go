@@ -16,6 +16,8 @@ package aws
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -30,6 +32,7 @@ import (
 
 	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
+	prov "github.com/external-secrets/external-secrets/apis/providers/v1alpha1"
 	awsauth "github.com/external-secrets/external-secrets/pkg/provider/aws/auth"
 	"github.com/external-secrets/external-secrets/pkg/provider/aws/parameterstore"
 	"github.com/external-secrets/external-secrets/pkg/provider/aws/secretsmanager"
@@ -41,7 +44,9 @@ import (
 var _ esv1beta1.Provider = &Provider{}
 
 // Provider satisfies the provider interface.
-type Provider struct{}
+type Provider struct {
+	storeKind string
+}
 
 const (
 	errUnableCreateSession    = "unable to create session: %w"
@@ -51,8 +56,20 @@ const (
 	errInvalidSecretsManager  = "invalid SecretsManager settings: %s"
 )
 
-func (p *Provider) Convert(_ esv1beta1.GenericStore) (client.Object, error) {
-	return nil, nil
+func (p *Provider) Convert(in esv1beta1.GenericStore) (client.Object, error) {
+	out := &prov.AWS{}
+	tmp := map[string]interface{}{
+		"spec": in.GetSpec().Provider.AWS,
+	}
+	d, err := json.Marshal(tmp)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(d, out)
+	if err != nil {
+		return nil, fmt.Errorf("could not convert %v in a valid fake provider: %w", in.GetName(), err)
+	}
+	return out, nil
 }
 
 // Capabilities return the provider supported capabilities (ReadOnly, WriteOnly, ReadWrite).
@@ -60,16 +77,32 @@ func (p *Provider) Capabilities() esv1beta1.SecretStoreCapabilities {
 	return esv1beta1.SecretStoreReadWrite
 }
 
-func (p *Provider) ApplyReferent(spec client.Object, _ esmeta.ReferentCallOrigin, _ string) (client.Object, error) {
-	return spec, nil
+func (p *Provider) ApplyReferent(spec client.Object, caller esmeta.ReferentCallOrigin, _ string) (client.Object, error) {
+	converted, ok := spec.(*prov.AWS)
+	out := converted.DeepCopy()
+	if !ok {
+		return nil, fmt.Errorf("could not convert source object %v into 'fake' provider type: object from type %T", spec.GetName(), spec)
+	}
+	switch caller {
+	case esmeta.ReferentCallClusterSecretStore:
+		p.storeKind = esv1beta1.ClusterSecretStoreKind
+	case esmeta.ReferentCallSecretStore:
+	case esmeta.ReferentCallProvider:
+	default:
+	}
+	return out, nil
 }
-func (p *Provider) NewClientFromObj(_ context.Context, _ client.Object, _ client.Client, _ string) (esv1beta1.SecretsClient, error) {
-	return nil, fmt.Errorf("not implemented")
+func (p *Provider) NewClientFromObj(ctx context.Context, object client.Object, kube client.Client, namespace string) (esv1beta1.SecretsClient, error) {
+	store, ok := object.(*prov.AWS)
+	if !ok {
+		return nil, errors.New("could not load aws provider")
+	}
+	return newClient(ctx, store, kube, namespace, p.storeKind, awsauth.DefaultSTSProvider)
 }
 
 // NewClient constructs a new secrets client based on the provided store.
 func (p *Provider) NewClient(ctx context.Context, store esv1beta1.GenericStore, kube client.Client, namespace string) (esv1beta1.SecretsClient, error) {
-	return newClient(ctx, store, kube, namespace, awsauth.DefaultSTSProvider)
+	return nil, errors.New("no longer supported")
 }
 
 func (p *Provider) ValidateStore(store esv1beta1.GenericStore) (admission.Warnings, error) {
@@ -147,33 +180,29 @@ func validateSecretsManagerConfig(prov *esv1beta1.AWSProvider) error {
 	})
 }
 
-func newClient(ctx context.Context, store esv1beta1.GenericStore, kube client.Client, namespace string, assumeRoler awsauth.STSProvider) (esv1beta1.SecretsClient, error) {
-	prov, err := util.GetAWSProvider(store)
-	if err != nil {
-		return nil, err
-	}
+func newClient(ctx context.Context, store *prov.AWS, kube client.Client, namespace, storeKind string, assumeRoler awsauth.STSProvider) (esv1beta1.SecretsClient, error) {
 	if store == nil {
 		return nil, fmt.Errorf(errInitAWSProvider, "nil store")
 	}
-	storeSpec := store.GetSpec()
+	storeSpec := store.Spec
 	var cfg *aws.Config
 
 	// allow SecretStore controller validation to pass
 	// when using referent namespace.
-	if util.IsReferentSpec(prov.Auth) && namespace == "" &&
-		store.GetObjectKind().GroupVersionKind().Kind == esv1beta1.ClusterSecretStoreKind {
+	if util.IsReferentSpec(storeSpec.Auth) && namespace == "" &&
+		storeKind == esv1beta1.ClusterSecretStoreKind {
 		cfg = aws.NewConfig().WithRegion("eu-west-1").WithEndpointResolver(awsauth.ResolveEndpoint())
 		sess := &session.Session{Config: cfg}
-		switch prov.Service {
-		case esv1beta1.AWSServiceSecretsManager:
-			return secretsmanager.New(sess, cfg, prov.SecretsManager, true)
-		case esv1beta1.AWSServiceParameterStore:
-			return parameterstore.New(sess, cfg, storeSpec.Provider.AWS.Prefix, true)
+		switch storeSpec.Service {
+		case prov.AWSServiceSecretsManager:
+			return secretsmanager.New(sess, cfg, storeSpec.SecretsManager, true)
+		case prov.AWSServiceParameterStore:
+			return parameterstore.New(sess, cfg, storeSpec.Prefix, true)
 		}
-		return nil, fmt.Errorf(errUnknownProviderService, prov.Service)
+		return nil, fmt.Errorf(errUnknownProviderService, storeSpec.Service)
 	}
 
-	sess, err := awsauth.New(ctx, store, kube, namespace, assumeRoler, awsauth.DefaultJWTProvider)
+	sess, err := awsauth.New(ctx, store, kube, namespace, storeKind, assumeRoler, awsauth.DefaultJWTProvider)
 	if err != nil {
 		return nil, fmt.Errorf(errUnableCreateSession, err)
 	}
@@ -203,13 +232,13 @@ func newClient(ctx context.Context, store esv1beta1.GenericStore, kube client.Cl
 		cfg = request.WithRetryer(aws.NewConfig(), awsRetryer)
 	}
 
-	switch prov.Service {
-	case esv1beta1.AWSServiceSecretsManager:
-		return secretsmanager.New(sess, cfg, prov.SecretsManager, false)
-	case esv1beta1.AWSServiceParameterStore:
-		return parameterstore.New(sess, cfg, storeSpec.Provider.AWS.Prefix, false)
+	switch storeSpec.Service {
+	case prov.AWSServiceSecretsManager:
+		return secretsmanager.New(sess, cfg, storeSpec.SecretsManager, false)
+	case prov.AWSServiceParameterStore:
+		return parameterstore.New(sess, cfg, storeSpec.Prefix, false)
 	}
-	return nil, fmt.Errorf(errUnknownProviderService, prov.Service)
+	return nil, fmt.Errorf(errUnknownProviderService, storeSpec.Service)
 }
 
 func init() {

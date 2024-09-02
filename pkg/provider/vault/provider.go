@@ -187,7 +187,7 @@ func (p *Provider) initClient(ctx context.Context, c *client, client util.Client
 	return c, nil
 }
 
-func (p *Provider) prepareConfig(ctx context.Context, kube kclient.Client, corev1 typedcorev1.CoreV1Interface, vaultSpec *esv1beta1.VaultProvider, retrySettings *esv1beta1.SecretStoreRetrySettings, namespace, storeKind string) (*client, *vault.Config, error) {
+func (p *Provider) prepareConfig(ctx context.Context, kube kclient.Client, corev1 typedcorev1.CoreV1Interface, vaultSpec *esv1beta1.VaultProvider, retrySettings *esmeta.RetrySettings, namespace, storeKind string) (*client, *vault.Config, error) {
 	c := &client{
 		kube:      kube,
 		corev1:    corev1,

@@ -37,6 +37,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
+	prov "github.com/external-secrets/external-secrets/apis/providers/v1alpha1"
 	fakesm "github.com/external-secrets/external-secrets/pkg/provider/aws/secretsmanager/fake"
 	"github.com/external-secrets/external-secrets/pkg/provider/aws/util"
 	"github.com/external-secrets/external-secrets/pkg/provider/testing/fake"
@@ -806,7 +807,7 @@ func TestDeleteSecret(t *testing.T) {
 	}
 	type args struct {
 		client               fakesm.Client
-		config               esv1beta1.SecretsManager
+		config               prov.SecretsManager
 		getSecretOutput      *awssm.GetSecretValueOutput
 		describeSecretOutput *awssm.DescribeSecretOutput
 		deleteSecretOutput   *awssm.DeleteSecretOutput
@@ -827,7 +828,7 @@ func TestDeleteSecret(t *testing.T) {
 			args: args{
 
 				client:          fakeClient,
-				config:          esv1beta1.SecretsManager{},
+				config:          prov.SecretsManager{},
 				getSecretOutput: &awssm.GetSecretValueOutput{},
 				describeSecretOutput: &awssm.DescribeSecretOutput{
 					Tags: []*awssm.Tag{&secretTag},
@@ -846,7 +847,7 @@ func TestDeleteSecret(t *testing.T) {
 			args: args{
 
 				client: fakeClient,
-				config: esv1beta1.SecretsManager{
+				config: prov.SecretsManager{
 					ForceDeleteWithoutRecovery: true,
 				},
 				getSecretOutput: &awssm.GetSecretValueOutput{},
@@ -869,7 +870,7 @@ func TestDeleteSecret(t *testing.T) {
 			args: args{
 
 				client:          fakeClient,
-				config:          esv1beta1.SecretsManager{},
+				config:          prov.SecretsManager{},
 				getSecretOutput: &awssm.GetSecretValueOutput{},
 				describeSecretOutput: &awssm.DescribeSecretOutput{
 					Tags: []*awssm.Tag{},
@@ -888,7 +889,7 @@ func TestDeleteSecret(t *testing.T) {
 			args: args{
 
 				client: fakesm.Client{},
-				config: esv1beta1.SecretsManager{
+				config: prov.SecretsManager{
 					RecoveryWindowInDays: 1,
 				},
 				getSecretOutput: &awssm.GetSecretValueOutput{},
@@ -909,7 +910,7 @@ func TestDeleteSecret(t *testing.T) {
 			args: args{
 
 				client: fakesm.Client{},
-				config: esv1beta1.SecretsManager{
+				config: prov.SecretsManager{
 					RecoveryWindowInDays:       7,
 					ForceDeleteWithoutRecovery: true,
 				},
@@ -931,7 +932,7 @@ func TestDeleteSecret(t *testing.T) {
 			args: args{
 
 				client:               fakeClient,
-				config:               esv1beta1.SecretsManager{},
+				config:               prov.SecretsManager{},
 				getSecretOutput:      &awssm.GetSecretValueOutput{},
 				describeSecretOutput: nil,
 				deleteSecretOutput:   nil,
@@ -947,7 +948,7 @@ func TestDeleteSecret(t *testing.T) {
 		"Secret Not Found": {
 			args: args{
 				client:               fakeClient,
-				config:               esv1beta1.SecretsManager{},
+				config:               prov.SecretsManager{},
 				getSecretOutput:      nil,
 				describeSecretOutput: nil,
 				deleteSecretOutput:   nil,
@@ -962,7 +963,7 @@ func TestDeleteSecret(t *testing.T) {
 		"Not expected AWS error": {
 			args: args{
 				client:               fakeClient,
-				config:               esv1beta1.SecretsManager{},
+				config:               prov.SecretsManager{},
 				getSecretOutput:      nil,
 				describeSecretOutput: nil,
 				deleteSecretOutput:   nil,
@@ -977,7 +978,7 @@ func TestDeleteSecret(t *testing.T) {
 		"unexpected error": {
 			args: args{
 				client:               fakeClient,
-				config:               esv1beta1.SecretsManager{},
+				config:               prov.SecretsManager{},
 				getSecretOutput:      nil,
 				describeSecretOutput: nil,
 				deleteSecretOutput:   nil,

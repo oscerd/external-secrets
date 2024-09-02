@@ -75,7 +75,7 @@ func (g *Provider) ApplyReferent(spec kclient.Object, caller esmeta.ReferentCall
 func (g *Provider) Convert(in esv1beta1.GenericStore) (kclient.Object, error) {
 	out := &prov.Gitlab{}
 	tmp := map[string]interface{}{
-		"spec": in.GetSpec().Provider.Fake,
+		"spec": in.GetSpec().Provider.Gitlab,
 	}
 	d, err := json.Marshal(tmp)
 	if err != nil {

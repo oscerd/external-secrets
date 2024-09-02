@@ -31,6 +31,7 @@ import (
 
 	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
+	prov "github.com/external-secrets/external-secrets/apis/providers/v1alpha1"
 	"github.com/external-secrets/external-secrets/pkg/provider/aws/parameterstore"
 	"github.com/external-secrets/external-secrets/pkg/provider/aws/secretsmanager"
 )
@@ -47,7 +48,7 @@ func TestProvider(t *testing.T) {
 
 	tbl := []struct {
 		test    string
-		store   esv1beta1.GenericStore
+		store   *prov.AWS
 		expType any
 		expErr  bool
 	}{
@@ -59,30 +60,24 @@ func TestProvider(t *testing.T) {
 		{
 			test:   "should not create provider due to missing provider",
 			expErr: true,
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{},
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{},
 			},
 		},
 		{
 			test:   "should not create provider due to missing provider field",
 			expErr: true,
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{},
-				},
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{},
 			},
 		},
 		{
 			test:    "should create parameter store client",
 			expErr:  false,
 			expType: &parameterstore.ParameterStore{},
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{
-							Service: esv1beta1.AWSServiceParameterStore,
-						},
-					},
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{
+					Service: prov.AWSServiceParameterStore,
 				},
 			},
 		},
@@ -90,44 +85,32 @@ func TestProvider(t *testing.T) {
 			test:    "should create secretsmanager client",
 			expErr:  false,
 			expType: &secretsmanager.SecretsManager{},
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{
-							Service: esv1beta1.AWSServiceSecretsManager,
-						},
-					},
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{
+					Service: prov.AWSServiceSecretsManager,
 				},
 			},
 		},
 		{
 			test:   "invalid service should return an error",
 			expErr: true,
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{
-							Service: "HIHIHIHHEHEHEHEHEHE",
-						},
-					},
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{
+					Service: "HIHIHIHHEHEHEHEHEHE",
 				},
 			},
 		},
 		{
 			test:   "newSession error should be returned",
 			expErr: true,
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{
-							Service: esv1beta1.AWSServiceParameterStore,
-							Auth: esv1beta1.AWSAuth{
-								SecretRef: &esv1beta1.AWSAuthSecretRef{
-									AccessKeyID: esmeta.SecretKeySelector{
-										Name:      "foo",
-										Namespace: aws.String("NOOP"),
-									},
-								},
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{
+					Service: prov.AWSServiceParameterStore,
+					Auth: prov.AWSAuth{
+						SecretRef: &prov.AWSAuthSecretRef{
+							AccessKeyID: esmeta.SecretKeySelector{
+								Name:      "foo",
+								Namespace: aws.String("NOOP"),
 							},
 						},
 					},
@@ -138,7 +121,7 @@ func TestProvider(t *testing.T) {
 	for i := range tbl {
 		row := tbl[i]
 		t.Run(row.test, func(t *testing.T) {
-			sc, err := p.NewClient(context.TODO(), row.store, cl, "foo")
+			sc, err := p.NewClientFromObj(context.TODO(), row.store, cl, "foo")
 			if row.expErr {
 				assert.Error(t, err)
 				assert.Nil(t, sc)
@@ -483,28 +466,24 @@ func TestValidateStore(t *testing.T) {
 
 func TestValidRetryInput(t *testing.T) {
 	invalid := "Invalid"
-	spec := &esv1beta1.SecretStore{
-		Spec: esv1beta1.SecretStoreSpec{
-			Provider: &esv1beta1.SecretStoreProvider{
-				AWS: &esv1beta1.AWSProvider{
-					Service: "ParameterStore",
-					Region:  validRegion,
-					Auth: esv1beta1.AWSAuth{
-						SecretRef: &esv1beta1.AWSAuthSecretRef{
-							SecretAccessKey: esmeta.SecretKeySelector{
-								Name: "creds",
-								Key:  "sak",
-							},
-							AccessKeyID: esmeta.SecretKeySelector{
-								Name: "creds",
-								Key:  "ak",
-							},
-						},
+	spec := &prov.AWS{
+		Spec: prov.AWSSpec{
+			Service: "ParameterStore",
+			RetrySettings: &esmeta.RetrySettings{
+				RetryInterval: &invalid,
+			},
+			Region: validRegion,
+			Auth: prov.AWSAuth{
+				SecretRef: &prov.AWSAuthSecretRef{
+					SecretAccessKey: esmeta.SecretKeySelector{
+						Name: "creds",
+						Key:  "sak",
+					},
+					AccessKeyID: esmeta.SecretKeySelector{
+						Name: "creds",
+						Key:  "ak",
 					},
 				},
-			},
-			RetrySettings: &esv1beta1.SecretStoreRetrySettings{
-				RetryInterval: &invalid,
 			},
 		},
 	}
@@ -523,8 +502,7 @@ func TestValidRetryInput(t *testing.T) {
 		},
 	}).Build()
 	provider := func(*session.Session) stsiface.STSAPI { return nil }
-
-	_, err := newClient(ctx, spec, kube, "default", provider)
+	_, err := newClient(ctx, spec, kube, "default", prov.AWSKind, provider)
 
 	if !ErrorContains(err, expected) {
 		t.Errorf("CheckValidRetryInput unexpected error: %s, expected: '%s'", err.Error(), expected)

@@ -22,6 +22,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 
 	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
+	prov "github.com/external-secrets/external-secrets/apis/providers/v1alpha1"
 )
 
 const (
@@ -51,7 +52,7 @@ func GetAWSProvider(store esv1beta1.GenericStore) (*esv1beta1.AWSProvider, error
 	return prov, nil
 }
 
-func IsReferentSpec(prov esv1beta1.AWSAuth) bool {
+func IsReferentSpec(prov prov.AWSAuth) bool {
 	if prov.JWTAuth != nil && prov.JWTAuth.ServiceAccountRef != nil && prov.JWTAuth.ServiceAccountRef.Namespace == nil {
 		return true
 	}

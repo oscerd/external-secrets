@@ -33,6 +33,7 @@ import (
 
 	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
+	prov "github.com/external-secrets/external-secrets/apis/providers/v1alpha1"
 	fakesess "github.com/external-secrets/external-secrets/pkg/provider/aws/auth/fake"
 )
 
@@ -47,38 +48,13 @@ func TestNewSession(t *testing.T) {
 	rows := []TestSessionRow{
 		{
 			name:      "nil store",
-			expectErr: "found nil store",
+			expectErr: "no store found",
 			store:     nil,
 		},
 		{
-			name:      "not store spec",
-			expectErr: "storeSpec is missing provider",
-			store:     &esv1beta1.SecretStore{},
-		},
-		{
-			name:      "store spec has no provider",
-			expectErr: "storeSpec is missing provider",
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{},
-			},
-		},
-		{
-			name:      "spec has no awssm field",
-			expectErr: "Missing AWS field",
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{},
-				},
-			},
-		},
-		{
 			name: "configure aws using environment variables",
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{},
-					},
-				},
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{},
 			},
 			env: map[string]string{
 				"AWS_ACCESS_KEY_ID":     "1111",
@@ -109,13 +85,9 @@ func TestNewSession(t *testing.T) {
 					},
 				}
 			},
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{
-							Role: "foo-bar-baz",
-						},
-					},
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{
+					Role: "foo-bar-baz",
 				},
 			},
 			env: map[string]string{
@@ -129,21 +101,17 @@ func TestNewSession(t *testing.T) {
 		{
 			name:      "error out when secret with credentials does not exist",
 			namespace: "foo",
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{
-							Auth: esv1beta1.AWSAuth{
-								SecretRef: &esv1beta1.AWSAuthSecretRef{
-									AccessKeyID: esmeta.SecretKeySelector{
-										Name: "othersecret",
-										Key:  "one",
-									},
-									SecretAccessKey: esmeta.SecretKeySelector{
-										Name: "othersecret",
-										Key:  "two",
-									},
-								},
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{
+					Auth: prov.AWSAuth{
+						SecretRef: &prov.AWSAuthSecretRef{
+							AccessKeyID: esmeta.SecretKeySelector{
+								Name: "othersecret",
+								Key:  "one",
+							},
+							SecretAccessKey: esmeta.SecretKeySelector{
+								Name: "othersecret",
+								Key:  "two",
 							},
 						},
 					},
@@ -154,23 +122,19 @@ func TestNewSession(t *testing.T) {
 		{
 			name:      "use credentials from secret to configure aws",
 			namespace: "foo",
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{
-							Auth: esv1beta1.AWSAuth{
-								SecretRef: &esv1beta1.AWSAuthSecretRef{
-									AccessKeyID: esmeta.SecretKeySelector{
-										Name: "onesecret",
-										// Namespace is not set
-										Key: "one",
-									},
-									SecretAccessKey: esmeta.SecretKeySelector{
-										Name: "onesecret",
-										// Namespace is not set
-										Key: "two",
-									},
-								},
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{
+					Auth: prov.AWSAuth{
+						SecretRef: &prov.AWSAuthSecretRef{
+							AccessKeyID: esmeta.SecretKeySelector{
+								Name: "onesecret",
+								// Namespace is not set
+								Key: "one",
+							},
+							SecretAccessKey: esmeta.SecretKeySelector{
+								Name: "onesecret",
+								// Namespace is not set
+								Key: "two",
 							},
 						},
 					},
@@ -195,21 +159,17 @@ func TestNewSession(t *testing.T) {
 		{
 			name:      "error out when secret key does not exist",
 			namespace: "foo",
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{
-							Auth: esv1beta1.AWSAuth{
-								SecretRef: &esv1beta1.AWSAuthSecretRef{
-									AccessKeyID: esmeta.SecretKeySelector{
-										Name: "brokensecret",
-										Key:  "one",
-									},
-									SecretAccessKey: esmeta.SecretKeySelector{
-										Name: "brokensecret",
-										Key:  "two",
-									},
-								},
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{
+					Auth: prov.AWSAuth{
+						SecretRef: &prov.AWSAuthSecretRef{
+							AccessKeyID: esmeta.SecretKeySelector{
+								Name: "brokensecret",
+								Key:  "one",
+							},
+							SecretAccessKey: esmeta.SecretKeySelector{
+								Name: "brokensecret",
+								Key:  "two",
 							},
 						},
 					},
@@ -229,23 +189,19 @@ func TestNewSession(t *testing.T) {
 		{
 			name:      "should not be able to access secrets from different namespace",
 			namespace: "foo",
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{
-							Auth: esv1beta1.AWSAuth{
-								SecretRef: &esv1beta1.AWSAuthSecretRef{
-									AccessKeyID: esmeta.SecretKeySelector{
-										Name:      "onesecret",
-										Namespace: aws.String("evil"), // this should not be possible!
-										Key:       "one",
-									},
-									SecretAccessKey: esmeta.SecretKeySelector{
-										Name:      "onesecret",
-										Namespace: aws.String("evil"),
-										Key:       "two",
-									},
-								},
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{
+					Auth: prov.AWSAuth{
+						SecretRef: &prov.AWSAuthSecretRef{
+							AccessKeyID: esmeta.SecretKeySelector{
+								Name:      "onesecret",
+								Namespace: aws.String("evil"), // this should not be possible!
+								Key:       "one",
+							},
+							SecretAccessKey: esmeta.SecretKeySelector{
+								Name:      "onesecret",
+								Namespace: aws.String("evil"),
+								Key:       "two",
 							},
 						},
 					},
@@ -268,27 +224,20 @@ func TestNewSession(t *testing.T) {
 		{
 			name:      "ClusterStore should use credentials from a specific namespace",
 			namespace: esNamespaceKey,
-			store: &esv1beta1.ClusterSecretStore{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: esv1beta1.ClusterSecretStoreKindAPIVersion,
-					Kind:       esv1beta1.ClusterSecretStoreKind,
-				},
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{
-							Auth: esv1beta1.AWSAuth{
-								SecretRef: &esv1beta1.AWSAuthSecretRef{
-									AccessKeyID: esmeta.SecretKeySelector{
-										Name:      "onesecret",
-										Namespace: aws.String(platformTeamNsKey),
-										Key:       "one",
-									},
-									SecretAccessKey: esmeta.SecretKeySelector{
-										Name:      "onesecret",
-										Namespace: aws.String(platformTeamNsKey),
-										Key:       "two",
-									},
-								},
+			storeKind: esv1beta1.ClusterSecretStoreKind,
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{
+					Auth: prov.AWSAuth{
+						SecretRef: &prov.AWSAuthSecretRef{
+							AccessKeyID: esmeta.SecretKeySelector{
+								Name:      "onesecret",
+								Namespace: aws.String(platformTeamNsKey),
+								Key:       "one",
+							},
+							SecretAccessKey: esmeta.SecretKeySelector{
+								Name:      "onesecret",
+								Namespace: aws.String(platformTeamNsKey),
+								Key:       "two",
 							},
 						},
 					},
@@ -313,25 +262,18 @@ func TestNewSession(t *testing.T) {
 		{
 			name:      "ClusterStore should use credentials from a ExternalSecret namespace (referentAuth)",
 			namespace: esNamespaceKey,
-			store: &esv1beta1.ClusterSecretStore{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: esv1beta1.ClusterSecretStoreKindAPIVersion,
-					Kind:       esv1beta1.ClusterSecretStoreKind,
-				},
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{
-							Auth: esv1beta1.AWSAuth{
-								SecretRef: &esv1beta1.AWSAuthSecretRef{
-									AccessKeyID: esmeta.SecretKeySelector{
-										Name: "onesecret",
-										Key:  "one",
-									},
-									SecretAccessKey: esmeta.SecretKeySelector{
-										Name: "onesecret",
-										Key:  "two",
-									},
-								},
+			storeKind: esv1beta1.ClusterSecretStoreKind,
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{
+					Auth: prov.AWSAuth{
+						SecretRef: &prov.AWSAuthSecretRef{
+							AccessKeyID: esmeta.SecretKeySelector{
+								Name: "onesecret",
+								Key:  "one",
+							},
+							SecretAccessKey: esmeta.SecretKeySelector{
+								Name: "onesecret",
+								Key:  "two",
 							},
 						},
 					},
@@ -381,21 +323,14 @@ func TestNewSession(t *testing.T) {
 					IsExpiredFunc: func() bool { return false },
 				}, nil
 			},
-			store: &esv1beta1.ClusterSecretStore{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: esv1beta1.ClusterSecretStoreKindAPIVersion,
-					Kind:       esv1beta1.ClusterSecretStoreKind,
-				},
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{
-							Auth: esv1beta1.AWSAuth{
-								JWTAuth: &esv1beta1.AWSJWTAuth{
-									ServiceAccountRef: &esmeta.ServiceAccountSelector{
-										Name:      myServiceAccountKey,
-										Namespace: aws.String(otherNsName),
-									},
-								},
+			storeKind: esv1beta1.ClusterSecretStoreKind,
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{
+					Auth: prov.AWSAuth{
+						JWTAuth: &prov.AWSJWTAuth{
+							ServiceAccountRef: &esmeta.ServiceAccountSelector{
+								Name:      myServiceAccountKey,
+								Namespace: aws.String(otherNsName),
 							},
 						},
 					},
@@ -426,14 +361,10 @@ func TestNewSession(t *testing.T) {
 					},
 				}
 			},
-			store: &esv1beta1.SecretStore{
-				Spec: esv1beta1.SecretStoreSpec{
-					Provider: &esv1beta1.SecretStoreProvider{
-						AWS: &esv1beta1.AWSProvider{
-							Role:       "foo-bar-baz",
-							ExternalID: "12345678",
-						},
-					},
+			store: &prov.AWS{
+				Spec: prov.AWSSpec{
+					Role:       "foo-bar-baz",
+					ExternalID: "12345678",
 				},
 			},
 			env: map[string]string{
@@ -455,11 +386,12 @@ func TestNewSession(t *testing.T) {
 
 type TestSessionRow struct {
 	name              string
-	store             esv1beta1.GenericStore
+	store             *prov.AWS
 	secrets           []v1.Secret
 	sa                *v1.ServiceAccount
 	jwtProvider       jwtProviderFactory
 	namespace         string
+	storeKind         string
 	stsProvider       STSProvider
 	expectProvider    bool
 	expectErr         string
@@ -488,7 +420,7 @@ func testRow(t *testing.T, row TestSessionRow) {
 		},
 	})
 	assert.Nil(t, err)
-	s, err := New(context.Background(), row.store, kc, row.namespace, row.stsProvider, row.jwtProvider)
+	s, err := New(context.Background(), row.store, kc, row.namespace, row.storeKind, row.stsProvider, row.jwtProvider)
 	if !ErrorContains(err, row.expectErr) {
 		t.Errorf("expected error %s but found %s", row.expectErr, err.Error())
 	}
@@ -509,14 +441,9 @@ func TestSMEnvCredentials(t *testing.T) {
 	k8sClient := clientfake.NewClientBuilder().Build()
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "1111")
 	t.Setenv("AWS_ACCESS_KEY_ID", "2222")
-	s, err := New(context.Background(), &esv1beta1.SecretStore{
-		Spec: esv1beta1.SecretStoreSpec{
-			Provider: &esv1beta1.SecretStoreProvider{
-				// defaults
-				AWS: &esv1beta1.AWSProvider{},
-			},
-		},
-	}, k8sClient, "example-ns", DefaultSTSProvider, nil)
+	s, err := New(context.Background(), &prov.AWS{
+		Spec: prov.AWSSpec{},
+	}, k8sClient, "example-ns", prov.AWSKind, DefaultSTSProvider, nil)
 	assert.Nil(t, err)
 	assert.NotNil(t, s)
 	creds, err := s.Config.Credentials.Get()
@@ -575,17 +502,12 @@ func TestSMAssumeRole(t *testing.T) {
 	}
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "1111")
 	t.Setenv("AWS_ACCESS_KEY_ID", "2222")
-	s, err := New(context.Background(), &esv1beta1.SecretStore{
-		Spec: esv1beta1.SecretStoreSpec{
-			Provider: &esv1beta1.SecretStoreProvider{
-				// do assume role!
-				AWS: &esv1beta1.AWSProvider{
-					Role:            "my-awesome-role",
-					AdditionalRoles: []string{"chained-role-1", "chained-role-2"},
-				},
-			},
+	s, err := New(context.Background(), &prov.AWS{
+		Spec: prov.AWSSpec{
+			Role:            "my-awesome-role",
+			AdditionalRoles: []string{"chained-role-1", "chained-role-2"},
 		},
-	}, k8sClient, "example-ns", func(se *awssess.Session) stsiface.STSAPI {
+	}, k8sClient, "example-ns", "SecretStore", func(se *awssess.Session) stsiface.STSAPI {
 		// check if the correct temporary credentials were used
 		creds, err := se.Config.Credentials.Get()
 		assert.Nil(t, err)

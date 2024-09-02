@@ -87,3 +87,9 @@ type CAProvider struct {
 	// +optional
 	Namespace *string `json:"namespace,omitempty"`
 }
+
+// Configures Retry Settings for providers/Secret Stores.
+type RetrySettings struct {
+	MaxRetries    *int32  `json:"maxRetries,omitempty"`
+	RetryInterval *string `json:"retryInterval,omitempty"`
+}

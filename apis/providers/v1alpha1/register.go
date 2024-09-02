@@ -38,4 +38,6 @@ func init() {
 	SchemeBuilder.Register(&Fake{}, &FakeList{})
 	SchemeBuilder.Register(&Gitlab{}, &GitlabList{})
 	SchemeBuilder.Register(&Akeyless{}, &AkeylessList{})
+	SchemeBuilder.Register(&Alibaba{}, &AlibabaList{})
+	SchemeBuilder.Register(&AWS{}, &AWSList{})
 }

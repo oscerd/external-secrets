@@ -95,7 +95,7 @@ func init() {
 func (p *Provider) Convert(in esv1beta1.GenericStore) (client.Object, error) {
 	out := &prov.Akeyless{}
 	tmp := map[string]interface{}{
-		"spec": in.GetSpec().Provider.Fake,
+		"spec": in.GetSpec().Provider.Akeyless,
 	}
 	d, err := json.Marshal(tmp)
 	if err != nil {

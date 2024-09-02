@@ -37,7 +37,7 @@ type SecretStoreSpec struct {
 	ProviderRef *esmeta.ProviderRef `json:"providerRef,omitempty"`
 	// Used to configure http retries if failed
 	// +optional
-	RetrySettings *SecretStoreRetrySettings `json:"retrySettings,omitempty"`
+	RetrySettings *esmeta.RetrySettings `json:"retrySettings,omitempty"`
 
 	// Used to configure store refresh interval in seconds. Empty or 0 will default to the controller config.
 	// +optional
@@ -195,11 +195,6 @@ type SecretStoreProvider struct {
 	// Beyondtrust configures this store to sync secrets using Password Safe provider.
 	// +optional
 	Beyondtrust *BeyondtrustProvider `json:"beyondtrust,omitempty"`
-}
-
-type SecretStoreRetrySettings struct {
-	MaxRetries    *int32  `json:"maxRetries,omitempty"`
-	RetryInterval *string `json:"retryInterval,omitempty"`
 }
 
 type SecretStoreConditionType string

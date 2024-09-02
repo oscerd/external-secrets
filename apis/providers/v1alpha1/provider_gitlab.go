@@ -36,6 +36,18 @@ type Gitlab struct {
 
 // Configures a store to sync secrets with a GitLab instance.
 type GitlabSpec struct {
+	// Used to select the correct ESO controller (think: ingress.ingressClassName)
+	// The ESO controller is instantiated with a specific controller name and filters ES based on this property
+	// +optional
+	Controller string `json:"controller,omitempty"`
+
+	// Used to configure http retries if failed
+	// +optional
+	RetrySettings *esmeta.RetrySettings `json:"retrySettings,omitempty"`
+
+	// Used to configure store refresh interval in seconds. Empty or 0 will default to the controller config.
+	// +optional
+	RefreshInterval int `json:"refreshInterval,omitempty"`
 	// URL configures the GitLab instance URL. Defaults to https://gitlab.com/.
 	URL string `json:"url,omitempty"`
 

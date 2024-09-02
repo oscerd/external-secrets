@@ -25,7 +25,18 @@ import (
 
 // AkeylessSpec Configures an store to sync secrets using Akeyless KV.
 type AkeylessSpec struct {
+	// Used to select the correct ESO controller (think: ingress.ingressClassName)
+	// The ESO controller is instantiated with a specific controller name and filters ES based on this property
+	// +optional
+	Controller string `json:"controller,omitempty"`
 
+	// Used to configure http retries if failed
+	// +optional
+	RetrySettings *esmeta.RetrySettings `json:"retrySettings,omitempty"`
+
+	// Used to configure store refresh interval in seconds. Empty or 0 will default to the controller config.
+	// +optional
+	RefreshInterval int `json:"refreshInterval,omitempty"`
 	// Akeyless GW API Url from which the secrets to be fetched from.
 	AkeylessGWApiURL *string `json:"akeylessGWApiURL"`
 

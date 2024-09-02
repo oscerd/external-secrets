@@ -18,5 +18,6 @@ resources:
   - providers.external-secrets.io_akeylesses.yaml
   - providers.external-secrets.io_alibabas.yaml
   - providers.external-secrets.io_awses.yaml
+  - providers.external-secrets.io_azurekvs.yaml
   - providers.external-secrets.io_fakes.yaml
   - providers.external-secrets.io_gitlabs.yaml

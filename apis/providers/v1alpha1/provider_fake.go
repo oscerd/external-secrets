@@ -19,11 +19,25 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
 )
 
 // FakeSpec contains the static data.
 type FakeSpec struct {
-	Data []FakeProviderData `json:"data"`
+	// Used to select the correct ESO controller (think: ingress.ingressClassName)
+	// The ESO controller is instantiated with a specific controller name and filters ES based on this property
+	// +optional
+	Controller string `json:"controller,omitempty"`
+
+	// Used to configure http retries if failed
+	// +optional
+	RetrySettings *esmeta.RetrySettings `json:"retrySettings,omitempty"`
+
+	// Used to configure store refresh interval in seconds. Empty or 0 will default to the controller config.
+	// +optional
+	RefreshInterval int                `json:"refreshInterval,omitempty"`
+	Data            []FakeProviderData `json:"data"`
 }
 
 type FakeProviderData struct {

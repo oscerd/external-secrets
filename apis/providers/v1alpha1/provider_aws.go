@@ -95,6 +95,18 @@ type Tag struct {
 
 // AWSProvider configures a store to sync secrets with AWS.
 type AWSSpec struct {
+	// Used to select the correct ESO controller (think: ingress.ingressClassName)
+	// The ESO controller is instantiated with a specific controller name and filters ES based on this property
+	// +optional
+	Controller string `json:"controller,omitempty"`
+
+	// Used to configure http retries if failed
+	// +optional
+	RetrySettings *esmeta.RetrySettings `json:"retrySettings,omitempty"`
+
+	// Used to configure store refresh interval in seconds. Empty or 0 will default to the controller config.
+	// +optional
+	RefreshInterval int `json:"refreshInterval,omitempty"`
 	// Service defines which service should be used to fetch the secrets
 	Service AWSServiceType `json:"service"`
 
@@ -133,13 +145,6 @@ type AWSSpec struct {
 	// Prefix adds a prefix to all retrieved values.
 	// +optional
 	Prefix string `json:"prefix,omitempty"`
-	// Used to configure http retries if failed
-	// +optional
-	RetrySettings *esmeta.RetrySettings `json:"retrySettings,omitempty"`
-
-	// Used to configure store refresh interval in seconds. Empty or 0 will default to the controller config.
-	// +optional
-	RefreshInterval int `json:"refreshInterval,omitempty"`
 }
 
 // +kubebuilder:object:root=true

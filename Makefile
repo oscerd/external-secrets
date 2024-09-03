@@ -72,7 +72,7 @@ FAIL	= (echo ${TIME} ${RED}[FAIL]${CNone} && false)
 # ====================================================================================
 # Conformance
 
-reviewable: generate docs manifests helm.generate helm.docs lint ## Ensure a PR is ready for review.
+reviewable: generate docs manifests helm.generate helm.schema.update helm.docs lint ## Ensure a PR is ready for review.
 	@go mod tidy
 	@cd e2e/ && go mod tidy
 
@@ -163,7 +163,7 @@ tilt-up: tilt manifests ## Generates the local manifests that tilt will use to d
 
 helm.docs: ## Generate helm docs
 	@cd $(HELM_DIR); \
-	docker run --rm -v $(shell pwd)/$(HELM_DIR):/helm-docs -u $(shell id -u) jnorwood/helm-docs:v1.5.0
+	docker run --rm -v $(shell pwd)/$(HELM_DIR):/helm-docs -u $(shell id -u) jnorwood/helm-docs:v1.7.0
 
 HELM_VERSION ?= $(shell helm show chart $(HELM_DIR) | grep 'version:' | sed 's/version: //g')
 
@@ -172,6 +172,16 @@ helm.build: helm.generate ## Build helm chart
 	@helm package $(HELM_DIR) --dependency-update --destination $(OUTPUT_DIR)/chart
 	@mv $(OUTPUT_DIR)/chart/external-secrets-$(HELM_VERSION).tgz $(OUTPUT_DIR)/chart/external-secrets.tgz
 	@$(OK) helm package
+
+helm.schema.plugin:
+	@$(INFO) Installing helm-values-schema-json plugin
+	@helm plugin install https://github.com/losisin/helm-values-schema-json.git || true
+	@$(OK) Installed helm-values-schema-json plugin
+
+helm.schema.update: helm.schema.plugin
+	@$(INFO) Generating values.schema.json
+	@helm schema -input $(HELM_DIR)/values.yaml -output $(HELM_DIR)/values.schema.json
+	@$(OK) Generated values.schema.json
 
 helm.generate:
 	./hack/helm.generate.sh $(BUNDLE_DIR) $(HELM_DIR)
@@ -322,7 +332,7 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 
 ## Tool Versions
-GOLANGCI_VERSION := 1.57.2
+GOLANGCI_VERSION := 1.60.1
 KUBERNETES_VERSION := 1.30.x
 TILT_VERSION := 0.33.10
 
